@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* { font-family: 'Inter', sans-serif; }
+
+body { @apply bg-gray-50 text-gray-900; }
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { @apply bg-gray-100; }
+::-webkit-scrollbar-thumb { @apply bg-gray-300 rounded-full; }
+
+.sidebar-patient { background: linear-gradient(180deg, #1e40af 0%, #2563eb 100%); }
+.sidebar-doctor  { background: linear-gradient(180deg, #065f46 0%, #059669 100%); }
+
+.card { @apply bg-white rounded-2xl shadow-sm border border-gray-100 p-6; }
+.btn-primary-patient {
+  @apply bg-patient-600 hover:bg-patient-700 text-white font-semibold px-6 py-3 rounded-xl
+         transition-all duration-200 flex items-center gap-2 justify-center;
+}
+.btn-primary-doctor {
+  @apply bg-doctor-600 hover:bg-doctor-700 text-white font-semibold px-6 py-3 rounded-xl
+         transition-all duration-200 flex items-center gap-2 justify-center;
+}
+.btn-outline {
+  @apply border border-gray-300 hover:border-gray-400 text-gray-700 font-medium px-4 py-2
+         rounded-xl transition-all duration-200 flex items-center gap-2 bg-white;
+}
+.input {
+  @apply w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none
+         focus:ring-2 focus:ring-patient-500 focus:border-transparent transition-all;
+}
+.input-doctor {
+  @apply w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none
+         focus:ring-2 focus:ring-doctor-500 focus:border-transparent transition-all;
+}
+.btn-primary-doctor {
+  @apply bg-doctor-600 hover:bg-doctor-700 text-white font-semibold px-6 py-3 rounded-xl
+         transition-all duration-200 flex items-center gap-2 justify-center;
+}
+.badge-active  { @apply text-xs font-semibold bg-green-100 text-green-700 px-2 py-1 rounded-full; }
+.badge-pending { @apply text-xs font-semibold bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full; }
+.badge-expired { @apply text-xs font-semibold bg-red-100 text-red-700 px-2 py-1 rounded-full; }
