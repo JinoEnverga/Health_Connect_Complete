@@ -26,24 +26,53 @@ import IssuePrescription   from './pages/doctor/IssuePrescription'
 import AllPrescriptions    from './pages/doctor/AllPrescriptions'
 import DoctorProfile       from './pages/doctor/DoctorProfile'
 
-// Pharmacist
+// BHW
+import BHWLayout           from './pages/bhw/BHWLayout'
+import BHWDashboard        from './pages/bhw/Dashboard'
+import BHWPatients         from './pages/bhw/Patients'
+import BHWRecordVitals     from './pages/bhw/RecordVitals'
+import BHWRegisterPatient  from './pages/bhw/RegisterPatient'
+import BHWScanPrescription from './pages/bhw/ScanPrescription'
+import BHWMedicalHistory   from './pages/bhw/MedicalHistory'
+
+// Admin
+import AdminLayout         from './pages/admin/AdminLayout'
+import AdminDashboard      from './pages/admin/Dashboard'
+import UserManagement      from './pages/admin/UserManagement'
+import Announcements       from './pages/admin/Announcements'
+import AuditLogs           from './pages/admin/AuditLogs'
+
+// Public
 import VerifyRx            from './pages/verify/VerifyRx'
 
+const roleHome = {
+  patient: '/dashboard',
+  doctor:  '/doctor/dashboard',
+  bhw:     '/bhw/dashboard',
+  admin:   '/admin/dashboard',
+}
+
+const Spinner = () => (
+  <div className="flex items-center justify-center h-screen">
+    <div className="animate-spin rounded-full h-10 w-10 border-4 border-patient-600 border-t-transparent"/>
+  </div>
+)
+
 function ProtectedRoute({ children, role }) {
-  const { user, profile, loading } = useAuth()
-  if (loading) return <div className="flex items-center justify-center h-screen"><div className="animate-spin rounded-full h-10 w-10 border-4 border-patient-600 border-t-transparent"/></div>
+  const { user, profile, loading, profileReady } = useAuth()
+  if (loading || !profileReady) return <Spinner />
   if (!user) return <Navigate to="/login" replace />
   if (role && profile?.role !== role) {
-    return <Navigate to={profile?.role === 'doctor' ? '/doctor/dashboard' : '/dashboard'} replace />
+    return <Navigate to={roleHome[profile?.role] || '/login'} replace />
   }
   return children
 }
 
 function RoleRedirect() {
-  const { user, profile, loading } = useAuth()
-  if (loading) return <div className="flex items-center justify-center h-screen"><div className="animate-spin rounded-full h-10 w-10 border-4 border-patient-600 border-t-transparent"/></div>
+  const { user, profile, loading, profileReady } = useAuth()
+  if (loading || !profileReady) return <Spinner />
   if (!user) return <Navigate to="/login" replace />
-  return <Navigate to={profile?.role === 'doctor' ? '/doctor/dashboard' : '/dashboard'} replace />
+  return <Navigate to={roleHome[profile?.role] || '/login'} replace />
 }
 
 export default function App() {
@@ -77,6 +106,24 @@ export default function App() {
             <Route path="prescribe"     element={<IssuePrescription />} />
             <Route path="prescriptions" element={<AllPrescriptions />} />
             <Route path="profile"       element={<DoctorProfile />} />
+          </Route>
+
+          {/* BHW Portal */}
+          <Route path="/bhw" element={<ProtectedRoute role="bhw"><BHWLayout /></ProtectedRoute>}>
+            <Route path="dashboard"         element={<BHWDashboard />} />
+            <Route path="patients"          element={<BHWPatients />} />
+            <Route path="record-vitals"     element={<BHWRecordVitals />} />
+            <Route path="register-patient"  element={<BHWRegisterPatient />} />
+            <Route path="scan-prescription" element={<BHWScanPrescription />} />
+            <Route path="medical-history"   element={<BHWMedicalHistory />} />
+          </Route>
+
+          {/* Admin Portal */}
+          <Route path="/admin" element={<ProtectedRoute role="admin"><AdminLayout /></ProtectedRoute>}>
+            <Route path="dashboard"     element={<AdminDashboard />} />
+            <Route path="users"         element={<UserManagement />} />
+            <Route path="announcements" element={<Announcements />} />
+            <Route path="audit-logs"    element={<AuditLogs />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

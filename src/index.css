@@ -12,6 +12,8 @@ body { @apply bg-gray-50 text-gray-900; }
 
 .sidebar-patient { background: linear-gradient(180deg, #1e40af 0%, #2563eb 100%); }
 .sidebar-doctor  { background: linear-gradient(180deg, #065f46 0%, #059669 100%); }
+.sidebar-bhw     { background: linear-gradient(180deg, #115e59 0%, #0d9488 100%); }
+.sidebar-admin   { background: linear-gradient(180deg, #14532d 0%, #16a34a 100%); }
 
 .card { @apply bg-white rounded-2xl shadow-sm border border-gray-100 p-6; }
 .btn-primary-patient {
@@ -38,6 +40,22 @@ body { @apply bg-gray-50 text-gray-900; }
   @apply bg-doctor-600 hover:bg-doctor-700 text-white font-semibold px-6 py-3 rounded-xl
          transition-all duration-200 flex items-center gap-2 justify-center;
 }
-.badge-active  { @apply text-xs font-semibold bg-green-100 text-green-700 px-2 py-1 rounded-full; }
-.badge-pending { @apply text-xs font-semibold bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full; }
-.badge-expired { @apply text-xs font-semibold bg-red-100 text-red-700 px-2 py-1 rounded-full; }
+.badge-active    { @apply text-xs font-semibold bg-green-100 text-green-700 px-2 py-1 rounded-full; }
+.badge-pending   { @apply text-xs font-semibold bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full; }
+.badge-expired   { @apply text-xs font-semibold bg-red-100 text-red-700 px-2 py-1 rounded-full; }
+.badge-bhw       { @apply text-xs font-semibold bg-teal-100 text-teal-700 px-2 py-1 rounded-full; }
+.badge-admin     { @apply text-xs font-semibold bg-green-100 text-green-800 px-2 py-1 rounded-full; }
+.badge-doctor    { @apply text-xs font-semibold bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full; }
+.badge-patient   { @apply text-xs font-semibold bg-blue-100 text-blue-700 px-2 py-1 rounded-full; }
+.btn-primary-bhw {
+  @apply bg-bhw-600 hover:bg-bhw-700 text-white font-semibold px-6 py-3 rounded-xl
+         transition-all duration-200 flex items-center gap-2 justify-center;
+}
+.btn-primary-admin {
+  @apply bg-admin-600 hover:bg-admin-700 text-white font-semibold px-6 py-3 rounded-xl
+         transition-all duration-200 flex items-center gap-2 justify-center;
+}
+.input-bhw {
+  @apply w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none
+         focus:ring-2 focus:ring-bhw-500 focus:border-transparent transition-all;
+}

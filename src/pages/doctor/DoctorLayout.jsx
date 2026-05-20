@@ -5,6 +5,7 @@ import {
   User, LogOut, Bell, Menu, CheckCircle
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
+import TelemedicineLogo from '../../components/TelemedicineLogo'
 
 const nav = [
   { to: '/doctor/dashboard',     icon: LayoutDashboard, label: 'Dashboard' },
@@ -32,11 +33,7 @@ export default function DoctorLayout() {
       {/* Logo */}
       <div className="px-5 py-6 border-b border-emerald-500/30">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center">
-            <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5 text-white" stroke="currentColor" strokeWidth={2.5}>
-              <path d="M12 5v14M5 12h14" strokeLinecap="round"/>
-            </svg>
-          </div>
+          <TelemedicineLogo className="w-9 h-9 shrink-0"/>
           <div>
             <div className="font-bold text-base leading-tight">Health</div>
             <div className="font-bold text-base leading-tight">Connect MD</div>
