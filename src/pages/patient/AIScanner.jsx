@@ -7,7 +7,7 @@ import { useAuth } from '../../contexts/AuthContext'
 //  Flask API — your HAM10000 EfficientNetB3 model
 //  Make sure api.py is running first:  python api.py
 // ─────────────────────────────────────────────────────────────
-const AI_API_URL = 'http://localhost:5000/predict'
+const AI_API_URL = 'https://healthconnect-ai-api.onrender.com/predict'
 
 // Risk styling driven by what the API returns in risk_level
 const RISK_STYLE = {
@@ -119,8 +119,7 @@ export default function AIScanner() {
       }
     } catch (err) {
       setError(
-        `Could not reach the AI model. ` +
-        `Make sure api.py is running: python api.py\n(${err.message})`
+        `Could not reach the AI model. The server may be waking up — please wait 30 seconds and try again.\n(${err.message})`
       )
     } finally {
       setAnalyzing(false)
