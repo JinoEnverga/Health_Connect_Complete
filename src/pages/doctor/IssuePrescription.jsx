@@ -85,7 +85,7 @@ export default function IssuePrescription() {
           <p><span className="font-semibold text-gray-600">Patient:</span> {form.patient_email}</p>
           <p><span className="font-semibold text-gray-600">Diagnosis:</span> {form.diagnosis}</p>
           <p><span className="font-semibold text-gray-600">Medications:</span> {meds.length}</p>
-          <p className="text-xs text-gray-400 mt-2">A QR code and 4-digit PIN have been generated for pharmacy verification.</p>
+          <p className="text-xs text-gray-400 mt-2">Pharmacy verification is now linked to the patient's birth year on file.</p>
         </div>
         <div className="flex gap-3 w-full">
           <button onClick={() => { setSuccess(null); setForm({ patient_email:'', diagnosis:'', additional_notes:'' }); setMeds([{...EMPTY_MED}]) }}

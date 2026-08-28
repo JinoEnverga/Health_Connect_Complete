@@ -122,8 +122,8 @@ export default function AllPrescriptions() {
                     <p className="text-gray-500 text-xs truncate">{rx.diagnosis}</p>
                     <p className="text-gray-400 text-xs mt-0.5">
                       {new Date(rx.issued_at).toLocaleDateString('en-PH', { month:'short', day:'numeric', year:'numeric' })}
-                      {rx.pin_verified_count > 0 && (
-                        <span className="ml-2 text-doctor-600 font-medium">· Verified {rx.pin_verified_count}×</span>
+                      {rx.verified_count > 0 && (
+                        <span className="ml-2 text-doctor-600 font-medium">· Verified {rx.verified_count}×</span>
                       )}
                     </p>
                   </div>

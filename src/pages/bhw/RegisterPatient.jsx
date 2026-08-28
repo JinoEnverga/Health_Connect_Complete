@@ -49,6 +49,7 @@ export default function RegisterPatient() {
 
     await supabase.from('patient_profiles').insert({
       user_id: userId,
+      birth_year: form.date_of_birth ? new Date(form.date_of_birth).getFullYear() : null,
       blood_type: form.blood_type || null,
       medical_history: form.medical_history || null,
       allergies: form.allergies ? [form.allergies] : [],

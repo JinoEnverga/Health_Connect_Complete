@@ -15,6 +15,20 @@ const ACCENT = {
   bhw:     { btn: 'bg-bhw-600 hover:bg-bhw-700',         link: 'text-bhw-600',     gradient: 'from-bhw-50 via-white to-teal-50',        label: 'BHW Portal' },
 }
 
+// Chronologically valid range for a birth year: no earlier than a very
+// generous human lifespan, and never later than the current year.
+const CURRENT_YEAR = new Date().getFullYear()
+const MIN_BIRTH_YEAR = CURRENT_YEAR - 120
+
+function validateBirthYear(value) {
+  if (!/^\d{4}$/.test(value)) return 'Birth year must be exactly 4 digits.'
+  const year = parseInt(value, 10)
+  if (year < MIN_BIRTH_YEAR || year > CURRENT_YEAR) {
+    return `Birth year must be between ${MIN_BIRTH_YEAR} and ${CURRENT_YEAR}.`
+  }
+  return ''
+}
+
 export default function Register() {
   const [params] = useSearchParams()
   const { signUp } = useAuth()
@@ -22,7 +36,7 @@ export default function Register() {
 
   const [form, setForm] = useState({
     firstName: '', lastName: '', email: '', password: '', confirm: '',
-    role: defaultRole,
+    birthYear: '', role: defaultRole,
   })
   const [showPw, setShowPw]   = useState(false)
   const [loading, setLoading] = useState(false)
@@ -32,11 +46,16 @@ export default function Register() {
   async function handleSubmit(e) {
     e.preventDefault()
     if (form.password !== form.confirm) { setError('Passwords do not match'); return }
+    if (form.role === 'patient') {
+      const birthYearError = validateBirthYear(form.birthYear)
+      if (birthYearError) { setError(birthYearError); return }
+    }
     setLoading(true); setError('')
     try {
       await signUp(form.email, form.password, form.role, {
         first_name: form.firstName,
         last_name:  form.lastName,
+        ...(form.role === 'patient' ? { birth_year: parseInt(form.birthYear, 10) } : {}),
       })
       setSuccess(true)
     } catch (err) {
@@ -120,6 +139,17 @@ export default function Register() {
                 className="input"/>
             </div>
           </div>
+
+          {form.role === 'patient' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Birth Year</label>
+              <input required inputMode="numeric" autoComplete="off" placeholder="e.g., 1998"
+                maxLength={4} value={form.birthYear}
+                onChange={e => setForm({...form, birthYear: e.target.value.replace(/\D/g, '').slice(0, 4)})}
+                className="input"/>
+              <p className="text-xs text-gray-400 mt-1">4 digits, e.g. 1998. Required for your patient profile.</p>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>

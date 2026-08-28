@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import TelemedicineLogo from '../../components/TelemedicineLogo'
+import BirthYearGate from '../../components/patient/BirthYearGate'
 
 const nav = [
   { to: '/dashboard',        icon: LayoutDashboard, label: 'Dashboard' },
@@ -91,6 +92,7 @@ export default function PatientLayout() {
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
+      <BirthYearGate />
       {/* Desktop Sidebar */}
       <aside className="hidden lg:flex shrink-0">
         <SidebarContent />

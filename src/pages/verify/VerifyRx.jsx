@@ -6,12 +6,19 @@ import { supabase } from '../../lib/supabase'
 export default function VerifyRx() {
   const { token } = useParams()
 
-  const [stage,  setStage]  = useState('enter_pin') // 'enter_pin' | 'verified' | 'error' | 'loading' | 'invalid'
-  const [pin,    setPin]    = useState(['', '', '', ''])
+  const [stage,  setStage]  = useState('enter_code') // 'enter_code' | 'verified' | 'error' | 'loading' | 'invalid'
+  const [code,   setCode]   = useState(['', '', '', ''])
   const [result, setResult] = useState(null)
   const [error,  setError]  = useState('')
   const [checking, setChecking] = useState(false)
-  const [showPin, setShowPin] = useState(false)
+  const [showCode, setShowCode] = useState(false)
+
+  // Client-side cooldown as a UX nicety only. The Supabase anon key is
+  // public in the JS bundle, so this RPC can be called directly over HTTP —
+  // the throttling that actually matters is enforced inside the
+  // verify_prescription function itself (see supabase/sql/).
+  const [cooldownUntil, setCooldownUntil] = useState(null)
+  const isCoolingDown = cooldownUntil !== null && cooldownUntil > Date.now()
 
   // Check token validity on load
   useEffect(() => {
@@ -37,35 +44,39 @@ export default function VerifyRx() {
     if (token) checkToken()
   }, [token])
 
-  // Handle PIN input
-  function handlePinInput(i, val) {
+  // Handle birth year input
+  function handleCodeInput(i, val) {
     if (!/^\d*$/.test(val)) return
-    const next = [...pin]
+    const next = [...code]
     next[i] = val.slice(-1)
-    setPin(next)
-    if (val && i < 3) document.getElementById(`pin-${i+1}`)?.focus()
+    setCode(next)
+    if (val && i < 3) document.getElementById(`code-${i+1}`)?.focus()
   }
 
-  function handlePinKeyDown(i, e) {
-    if (e.key === 'Backspace' && !pin[i] && i > 0) {
-      document.getElementById(`pin-${i-1}`)?.focus()
+  function handleCodeKeyDown(i, e) {
+    if (e.key === 'Backspace' && !code[i] && i > 0) {
+      document.getElementById(`code-${i-1}`)?.focus()
     }
   }
 
-  async function verifyPin() {
-    const fullPin = pin.join('')
-    if (fullPin.length < 4) { setError('Please enter all 4 digits.'); return }
+  async function verifyCode() {
+    if (isCoolingDown) return
+    const fullCode = code.join('')
+    if (fullCode.length < 4) { setError('Please enter all 4 digits.'); return }
     setChecking(true); setError('')
 
     const { data, error: rpcError } = await supabase
-      .rpc('verify_prescription', { p_token: token, p_pin: fullPin })
+      .rpc('verify_prescription', { p_token: token, p_birth_year: fullCode })
 
     setChecking(false)
 
     if (rpcError) { setError('Verification failed. Please try again.'); return }
 
     if (!data.success) {
-      setError(data.error || 'Incorrect PIN. Please ask the patient for the correct PIN.')
+      setError(data.error || "That birth year doesn't match our records for this patient.")
+      setCode(['', '', '', ''])
+      // Local, best-effort cooldown on top of the server-side lockout.
+      setCooldownUntil(Date.now() + 5_000)
       return
     }
 
@@ -81,7 +92,7 @@ export default function VerifyRx() {
           <AlertTriangle className="w-10 h-10 text-red-500"/>
         </div>
         <h2 className="text-2xl font-bold text-gray-900 mb-2">Invalid Prescription</h2>
-        <p className="text-gray-500">This QR code does not correspond to any valid prescription in our system.</p>
+        <p className="text-gray-500">This verification link does not correspond to any valid prescription in our system.</p>
       </div>
     </Page>
   )
@@ -215,34 +226,35 @@ export default function VerifyRx() {
         </div>
         <h2 className="text-2xl font-bold text-gray-900">Verify Prescription</h2>
         <p className="text-gray-500 text-sm mt-2">
-          Ask the patient for their 4-digit PIN, then enter it below to reveal the full prescription.
+          Ask the patient for their birth year, then enter it below to reveal the full prescription.
         </p>
       </div>
 
-      {/* PIN input */}
+      {/* Birth year input */}
       <div className="mb-6">
         <label className="block text-sm font-semibold text-gray-700 mb-3 text-center flex items-center justify-center gap-2">
-          <Lock className="w-4 h-4"/> Enter 4-Digit PIN
+          <Lock className="w-4 h-4"/> Enter Patient's Birth Year
         </label>
         <div className="flex gap-3 justify-center mb-2">
-          {pin.map((d, i) => (
+          {code.map((d, i) => (
             <input
-              key={i} id={`pin-${i}`}
-              type={showPin ? 'text' : 'password'}
+              key={i} id={`code-${i}`}
+              type={showCode ? 'text' : 'password'}
               inputMode="numeric"
               maxLength={1}
+              disabled={isCoolingDown}
               value={d}
-              onChange={e => handlePinInput(i, e.target.value)}
-              onKeyDown={e => handlePinKeyDown(i, e)}
-              className="w-14 h-16 text-center text-2xl font-bold border-2 rounded-xl focus:outline-none focus:border-patient-600 transition-all text-gray-900"
+              onChange={e => handleCodeInput(i, e.target.value)}
+              onKeyDown={e => handleCodeKeyDown(i, e)}
+              className="w-14 h-16 text-center text-2xl font-bold border-2 rounded-xl focus:outline-none focus:border-patient-600 transition-all text-gray-900 disabled:opacity-50"
               style={{ borderColor: d ? '#2563eb' : '#e5e7eb' }}
             />
           ))}
         </div>
-        <button onClick={() => setShowPin(!showPin)}
+        <button onClick={() => setShowCode(!showCode)}
           className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 mx-auto">
-          {showPin ? <EyeOff className="w-3 h-3"/> : <Eye className="w-3 h-3"/>}
-          {showPin ? 'Hide PIN' : 'Show PIN'}
+          {showCode ? <EyeOff className="w-3 h-3"/> : <Eye className="w-3 h-3"/>}
+          {showCode ? 'Hide' : 'Show'}
         </button>
       </div>
 
@@ -252,7 +264,7 @@ export default function VerifyRx() {
         </div>
       )}
 
-      <button onClick={verifyPin} disabled={checking || pin.join('').length < 4}
+      <button onClick={verifyCode} disabled={checking || isCoolingDown || code.join('').length < 4}
         className="w-full bg-patient-600 hover:bg-patient-700 disabled:opacity-40 text-white font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-2 text-base">
         {checking
           ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"/>
