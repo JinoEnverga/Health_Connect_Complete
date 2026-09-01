@@ -19,6 +19,7 @@ export default function AllPrescriptions() {
   const [loading,  setLoading]  = useState(true)
   const [expanded, setExpanded] = useState(null)
   const [medCache, setMedCache] = useState({})
+  const [fileUrlCache, setFileUrlCache] = useState({})
   const [revoking, setRevoking] = useState(null)
 
   useEffect(() => { if (user) load() }, [user])
@@ -42,6 +43,12 @@ export default function AllPrescriptions() {
     setMedCache(c => ({ ...c, [rxId]: data || [] }))
   }
 
+  async function loadFile(rx) {
+    if (!rx.file_path || fileUrlCache[rx.id]) return
+    const { data } = await supabase.storage.from('prescription-files').createSignedUrl(rx.file_path, 120)
+    if (data?.signedUrl) setFileUrlCache(c => ({ ...c, [rx.id]: data.signedUrl }))
+  }
+
   async function revoke(rxId) {
     if (!confirm('Revoke this prescription? The patient will no longer be able to use it.')) return
     setRevoking(rxId)
@@ -50,10 +57,10 @@ export default function AllPrescriptions() {
     setRevoking(null)
   }
 
-  function toggleExpand(rxId) {
-    if (expanded === rxId) { setExpanded(null); return }
-    setExpanded(rxId)
-    loadMeds(rxId)
+  function toggleExpand(rx) {
+    if (expanded === rx.id) { setExpanded(null); return }
+    setExpanded(rx.id)
+    if (rx.file_path) loadFile(rx); else loadMeds(rx.id)
   }
 
   const filtered = rxList.filter(r => {
@@ -134,7 +141,7 @@ export default function AllPrescriptions() {
                   </span>
 
                   {/* Expand */}
-                  <button onClick={() => toggleExpand(rx.id)} className="text-gray-400 hover:text-gray-600 shrink-0">
+                  <button onClick={() => toggleExpand(rx)} className="text-gray-400 hover:text-gray-600 shrink-0">
                     {isExp ? <ChevronUp className="w-4 h-4"/> : <ChevronDown className="w-4 h-4"/>}
                   </button>
                 </div>
@@ -149,27 +156,41 @@ export default function AllPrescriptions() {
                       <div><p className="text-xs text-gray-400">Expires</p><p className="font-medium text-gray-700">{new Date(rx.expires_at).toLocaleDateString('en-PH')}</p></div>
                     </div>
 
-                    {/* Medications */}
-                    <div>
-                      <p className="text-xs font-semibold text-gray-600 mb-2 flex items-center gap-1">
-                        <Pill className="w-3.5 h-3.5"/> Medications ({meds.length})
-                      </p>
-                      {meds.length === 0
-                        ? <p className="text-gray-400 text-xs">Loading...</p>
-                        : <div className="space-y-2">
-                            {meds.map(m => (
-                              <div key={m.id} className="bg-white rounded-xl px-3 py-2.5 text-sm border border-gray-100">
-                                <div className="flex items-center justify-between">
-                                  <p className="font-bold text-gray-800">{m.medicine_name}</p>
-                                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{m.dosage}</span>
+                    {/* Prescription file, or legacy medications for older Rx */}
+                    {rx.file_path ? (
+                      <div>
+                        <p className="text-xs font-semibold text-gray-600 mb-2 flex items-center gap-1">
+                          <FileText className="w-3.5 h-3.5"/> Prescription File
+                        </p>
+                        {fileUrlCache[rx.id]
+                          ? <a href={fileUrlCache[rx.id]} target="_blank" rel="noreferrer" download={rx.file_name}
+                              className="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-doctor-600 hover:border-doctor-300 transition-all">
+                              <FileText className="w-4 h-4"/> {rx.file_name || 'View file'}
+                            </a>
+                          : <p className="text-gray-400 text-xs">Loading file...</p>}
+                      </div>
+                    ) : (
+                      <div>
+                        <p className="text-xs font-semibold text-gray-600 mb-2 flex items-center gap-1">
+                          <Pill className="w-3.5 h-3.5"/> Medications ({meds.length})
+                        </p>
+                        {meds.length === 0
+                          ? <p className="text-gray-400 text-xs">Loading...</p>
+                          : <div className="space-y-2">
+                              {meds.map(m => (
+                                <div key={m.id} className="bg-white rounded-xl px-3 py-2.5 text-sm border border-gray-100">
+                                  <div className="flex items-center justify-between">
+                                    <p className="font-bold text-gray-800">{m.medicine_name}</p>
+                                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{m.dosage}</span>
+                                  </div>
+                                  <p className="text-xs text-gray-500 mt-0.5">{m.frequency} · {m.duration}</p>
+                                  {m.special_instructions && <p className="text-xs text-orange-600 mt-0.5">⚠️ {m.special_instructions}</p>}
                                 </div>
-                                <p className="text-xs text-gray-500 mt-0.5">{m.frequency} · {m.duration}</p>
-                                {m.special_instructions && <p className="text-xs text-orange-600 mt-0.5">⚠️ {m.special_instructions}</p>}
-                              </div>
-                            ))}
-                          </div>
-                      }
-                    </div>
+                              ))}
+                            </div>
+                        }
+                      </div>
+                    )}
 
                     {/* Notes */}
                     {rx.additional_notes && (

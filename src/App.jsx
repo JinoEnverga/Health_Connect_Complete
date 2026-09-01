@@ -42,9 +42,6 @@ import UserManagement      from './pages/admin/UserManagement'
 import Announcements       from './pages/admin/Announcements'
 import AuditLogs           from './pages/admin/AuditLogs'
 
-// Public
-import VerifyRx            from './pages/verify/VerifyRx'
-
 const roleHome = {
   patient: '/dashboard',
   doctor:  '/doctor/dashboard',
@@ -84,7 +81,6 @@ export default function App() {
           <Route path="/"        element={<RoleRedirect />} />
           <Route path="/login"   element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/verify/rx/:token" element={<VerifyRx />} />
 
           {/* Patient Portal */}
           <Route path="/" element={<ProtectedRoute role="patient"><PatientLayout /></ProtectedRoute>}>
