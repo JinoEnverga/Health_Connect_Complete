@@ -19,25 +19,30 @@ export default function Teleconsultation() {
 
   async function load() {
     setLoading(true); setLoadError('')
+
+    // Always load the upcoming list — even when a specific appointment was
+    // passed in — so "back" from that call has somewhere useful to land
+    // instead of an empty state, in case it was the wrong one.
+    const { data: upcomingData } = await supabase
+      .from('appointments')
+      .select(`*, doctor:profiles!appointments_doctor_id_fkey(first_name, last_name, doctor_profiles(specialization))`)
+      .eq('patient_id', user.id)
+      .eq('status', 'upcoming')
+      .order('appointment_date', { ascending: true })
+    setUpcoming(upcomingData || [])
+
     if (preselectedId) {
+      const found = (upcomingData || []).find(a => a.id === preselectedId)
+      if (found) { setAppointment(found); setLoading(false); return }
       const { data, error } = await supabase
         .from('appointments')
-        .select(`*, doctor:doctor_id(first_name, last_name, doctor_profiles(specialization))`)
+        .select(`*, doctor:profiles!appointments_doctor_id_fkey(first_name, last_name, doctor_profiles(specialization))`)
         .eq('id', preselectedId)
         .eq('patient_id', user.id)
         .single()
       if (error || !data) setLoadError('Could not load that appointment.')
       else setAppointment(data)
-      setLoading(false)
-      return
     }
-    const { data } = await supabase
-      .from('appointments')
-      .select(`*, doctor:doctor_id(first_name, last_name, doctor_profiles(specialization))`)
-      .eq('patient_id', user.id)
-      .eq('status', 'upcoming')
-      .order('appointment_date', { ascending: true })
-    setUpcoming(data || [])
     setLoading(false)
   }
 
@@ -89,5 +94,5 @@ export default function Teleconsultation() {
     </div>
   )
 
-  return <CallRoom appointment={appointment} user={user} isDoctor={false}/>
+  return <CallRoom appointment={appointment} user={user} isDoctor={false} onBack={() => setAppointment(null)}/>
 }

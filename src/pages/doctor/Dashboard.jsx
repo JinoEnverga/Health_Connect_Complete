@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Calendar, FileText, Users, CheckCircle, Clock, RefreshCw } from 'lucide-react'
+import { Calendar, FileText, Users, CheckCircle, Clock, RefreshCw, Video } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 
@@ -121,7 +121,13 @@ export default function DoctorDashboard() {
                     <p className="text-gray-500 text-xs">{a.appointment_date} · {a.time_slot}</p>
                     {a.chief_complaint && <p className="text-gray-400 text-xs truncate mt-0.5">{a.chief_complaint}</p>}
                   </div>
-                  <span className="badge-active shrink-0">Upcoming</span>
+                  <div className="flex flex-col items-end gap-1.5 shrink-0">
+                    <span className="badge-active">Upcoming</span>
+                    <button onClick={() => navigate('/doctor/teleconsultation', { state: { appointment: a } })}
+                      className="flex items-center gap-1 text-xs text-doctor-600 font-semibold hover:underline">
+                      <Video className="w-3 h-3"/> Start Call
+                    </button>
+                  </div>
                 </div>
               )
             })}

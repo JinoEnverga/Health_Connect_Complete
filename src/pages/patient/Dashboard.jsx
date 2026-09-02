@@ -133,7 +133,13 @@ export default function PatientDashboard() {
                   <p className="font-semibold text-gray-900 text-sm">{a.appointment_date}</p>
                   <p className="text-gray-500 text-xs">{a.time_slot} • {a.chief_complaint || 'Consultation'}</p>
                 </div>
-                <span className="badge-active">Upcoming</span>
+                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                  <span className="badge-active">Upcoming</span>
+                  <button onClick={() => navigate('/teleconsultation', { state: { appointment: a } })}
+                    className="flex items-center gap-1 text-xs text-patient-600 font-semibold hover:underline">
+                    <Video className="w-3 h-3"/> Join Call
+                  </button>
+                </div>
               </div>
             ))}
           </div>

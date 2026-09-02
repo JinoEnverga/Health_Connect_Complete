@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Video, VideoOff, Mic, MicOff, PhoneOff, MessageSquare, Send, AlertTriangle } from 'lucide-react'
+import { Video, VideoOff, Mic, MicOff, PhoneOff, MessageSquare, Send, AlertTriangle, ArrowLeft } from 'lucide-react'
 import useWebRTCCall from '../../hooks/useWebRTCCall'
 
 const STATUS_LABEL = {
@@ -16,7 +16,7 @@ const STATUS_LABEL = {
 // also decides who initiates the WebRTC offer (always the doctor, to avoid
 // both sides offering at once). See src/hooks/useWebRTCCall.js for the
 // actual signaling/connection logic.
-export default function CallRoom({ appointment, user, isDoctor }) {
+export default function CallRoom({ appointment, user, isDoctor, onBack }) {
   const other = isDoctor ? appointment.patient : appointment.doctor
   const otherName = other ? `${isDoctor ? '' : 'Dr. '}${other.first_name} ${other.last_name}` : (isDoctor ? 'Patient' : 'Doctor')
   const otherSub  = isDoctor ? (appointment.chief_complaint || 'Patient') : (other?.doctor_profiles?.specialization || 'Specialist')
@@ -60,11 +60,28 @@ export default function CallRoom({ appointment, user, isDoctor }) {
     setNewMsg('')
   }
 
+  function handleBack() {
+    if (callActive) {
+      if (!window.confirm('End this call and go back?')) return
+      hangUp()
+    }
+    onBack?.()
+  }
+
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Teleconsultation</h1>
-        <p className="text-gray-500 text-sm mt-1">{appointment.appointment_date} · {appointment.time_slot}</p>
+      <div className="flex items-center gap-3">
+        {onBack && (
+          <button onClick={handleBack} className="p-2 hover:bg-gray-100 rounded-xl transition-colors shrink-0" aria-label="Back">
+            <ArrowLeft className="w-5 h-5 text-gray-600"/>
+          </button>
+        )}
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Teleconsultation</h1>
+          <p className="text-gray-500 text-sm mt-1">
+            {otherName} · {appointment.appointment_date} · {appointment.time_slot}
+          </p>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4" style={{ height: 'calc(100vh - 220px)', minHeight: '500px' }}>
