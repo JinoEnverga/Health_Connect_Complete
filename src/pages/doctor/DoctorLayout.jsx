@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Calendar, FileText, ClipboardList,
-  User, LogOut, Bell, Menu, CheckCircle
+  User, LogOut, Bell, Menu, CheckCircle, Video
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import TelemedicineLogo from '../../components/TelemedicineLogo'
@@ -10,6 +10,7 @@ import TelemedicineLogo from '../../components/TelemedicineLogo'
 const nav = [
   { to: '/doctor/dashboard',     icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/doctor/appointments',  icon: Calendar,        label: 'Appointments' },
+  { to: '/doctor/teleconsultation', icon: Video,        label: 'Teleconsultation' },
   { to: '/doctor/prescribe',     icon: FileText,        label: 'Issue Prescription' },
   { to: '/doctor/prescriptions', icon: ClipboardList,   label: 'All Prescriptions' },
   { to: '/doctor/profile',       icon: User,            label: 'My Profile' },

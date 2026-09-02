@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import CallRoom from '../../components/shared/CallRoom'
 
-export default function Teleconsultation() {
+export default function DoctorTeleconsultation() {
   const { user } = useAuth()
   const location = useLocation()
   const preselectedId = location.state?.appointment?.id || null
@@ -22,9 +22,9 @@ export default function Teleconsultation() {
     if (preselectedId) {
       const { data, error } = await supabase
         .from('appointments')
-        .select(`*, doctor:doctor_id(first_name, last_name, doctor_profiles(specialization))`)
+        .select(`*, patient:patient_id(first_name, last_name)`)
         .eq('id', preselectedId)
-        .eq('patient_id', user.id)
+        .eq('doctor_id', user.id)
         .single()
       if (error || !data) setLoadError('Could not load that appointment.')
       else setAppointment(data)
@@ -33,8 +33,8 @@ export default function Teleconsultation() {
     }
     const { data } = await supabase
       .from('appointments')
-      .select(`*, doctor:doctor_id(first_name, last_name, doctor_profiles(specialization))`)
-      .eq('patient_id', user.id)
+      .select(`*, patient:patient_id(first_name, last_name)`)
+      .eq('doctor_id', user.id)
       .eq('status', 'upcoming')
       .order('appointment_date', { ascending: true })
     setUpcoming(data || [])
@@ -64,23 +64,23 @@ export default function Teleconsultation() {
           </div>
           <h2 className="text-xl font-bold text-gray-900 mb-2">No upcoming appointments</h2>
           <p className="text-gray-500 text-sm max-w-sm">
-            Book an appointment with a doctor, then join the video call from here once it's confirmed.
+            Start a video call from an upcoming appointment here or from Appointments.
           </p>
         </div>
       ) : (
         <div className="space-y-3">
           {upcoming.map(a => (
             <button key={a.id} onClick={() => setAppointment(a)}
-              className="card w-full flex items-center gap-4 text-left hover:border-patient-300 border border-transparent transition-all">
+              className="card w-full flex items-center gap-4 text-left hover:border-doctor-300 border border-transparent transition-all">
               <div className="w-11 h-11 bg-purple-100 rounded-xl flex items-center justify-center shrink-0">
                 <Calendar className="w-5 h-5 text-purple-600"/>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-bold text-gray-900 text-sm">Dr. {a.doctor?.first_name} {a.doctor?.last_name}</p>
+                <p className="font-bold text-gray-900 text-sm">{a.patient?.first_name} {a.patient?.last_name}</p>
                 <p className="text-xs text-gray-500">{a.appointment_date} · {a.time_slot}</p>
               </div>
-              <span className="flex items-center gap-1 text-xs text-patient-600 font-semibold shrink-0">
-                <Video className="w-3.5 h-3.5"/> Join
+              <span className="flex items-center gap-1 text-xs text-doctor-600 font-semibold shrink-0">
+                <Video className="w-3.5 h-3.5"/> Start
               </span>
             </button>
           ))}
@@ -89,5 +89,5 @@ export default function Teleconsultation() {
     </div>
   )
 
-  return <CallRoom appointment={appointment} user={user} isDoctor={false}/>
+  return <CallRoom appointment={appointment} user={user} isDoctor={true}/>
 }

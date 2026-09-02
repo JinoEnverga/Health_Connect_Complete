@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Calendar, RefreshCw, Search, CheckCircle, XCircle, Clock, FileText, ChevronDown } from 'lucide-react'
+import { Calendar, RefreshCw, Search, CheckCircle, XCircle, Clock, FileText, ChevronDown, Video } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
@@ -177,6 +177,10 @@ export default function DoctorAppointments() {
                     <div className="flex flex-wrap gap-2">
                       {a.status === 'upcoming' && (
                         <>
+                          <button onClick={() => navigate('/doctor/teleconsultation', { state: { appointment: a } })}
+                            className="flex items-center gap-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-all">
+                            <Video className="w-3.5 h-3.5"/> Start Video Call
+                          </button>
                           <button onClick={() => updateStatus(a.id, 'completed')} disabled={!!updating}
                             className="flex items-center gap-1.5 bg-doctor-600 hover:bg-doctor-700 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-all">
                             <CheckCircle className="w-3.5 h-3.5"/> Mark Completed

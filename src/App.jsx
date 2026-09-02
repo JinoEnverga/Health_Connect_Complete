@@ -24,6 +24,7 @@ import DoctorDashboard     from './pages/doctor/Dashboard'
 import DoctorAppointments  from './pages/doctor/Appointments'
 import IssuePrescription   from './pages/doctor/IssuePrescription'
 import AllPrescriptions    from './pages/doctor/AllPrescriptions'
+import DoctorTeleconsultation from './pages/doctor/Teleconsultation'
 import DoctorProfile       from './pages/doctor/DoctorProfile'
 
 // BHW
@@ -101,6 +102,7 @@ export default function App() {
             <Route path="appointments"  element={<DoctorAppointments />} />
             <Route path="prescribe"     element={<IssuePrescription />} />
             <Route path="prescriptions" element={<AllPrescriptions />} />
+            <Route path="teleconsultation" element={<DoctorTeleconsultation />} />
             <Route path="profile"       element={<DoctorProfile />} />
           </Route>
 
