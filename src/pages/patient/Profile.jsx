@@ -6,6 +6,17 @@ import { useAuth } from '../../contexts/AuthContext'
 const BLOOD_TYPES = ['A+','A-','B+','B-','AB+','AB-','O+','O-','Unknown']
 const GENDERS     = ['male','female','other','prefer_not_to_say']
 
+const CURRENT_YEAR   = new Date().getFullYear()
+const MIN_BIRTH_YEAR = CURRENT_YEAR - 120
+
+function validateBirthYear(value) {
+  if (!value) return '' // optional here — the first-login gate is what makes it required
+  if (!/^\d{4}$/.test(value)) return 'Birth year must be exactly 4 digits.'
+  const year = parseInt(value, 10)
+  if (year < MIN_BIRTH_YEAR || year > CURRENT_YEAR) return `Birth year must be between ${MIN_BIRTH_YEAR} and ${CURRENT_YEAR}.`
+  return ''
+}
+
 export default function PatientProfile() {
   const { user, profile, refreshProfile } = useAuth()
   const [editing, setEditing] = useState(false)
@@ -19,7 +30,7 @@ export default function PatientProfile() {
     first_name: '', last_name: '', phone: '', date_of_birth: '', gender: '',
     address: '', emergency_contact_name: '', emergency_contact_phone: '',
     blood_type: '', medical_history: '', height: '', weight: '',
-    allergies: [], current_medications: [],
+    allergies: [], current_medications: [], birth_year: '',
   })
 
   useEffect(() => { if (user) fetchPatientProfile() }, [user])
@@ -41,10 +52,13 @@ export default function PatientProfile() {
       medical_history:         data?.medical_history || '',
       allergies:               data?.allergies    || [],
       current_medications:     data?.current_medications || [],
+      birth_year:              data?.birth_year ? String(data.birth_year) : '',
     })
   }
 
   async function handleSave() {
+    const birthYearError = validateBirthYear(form.birth_year)
+    if (birthYearError) { setError(birthYearError); return }
     setSaving(true); setError(''); setSuccess(false)
     try {
       // Update base profile
@@ -64,6 +78,7 @@ export default function PatientProfile() {
           medical_history:         form.medical_history,
           allergies:               form.allergies,
           current_medications:     form.current_medications,
+          birth_year:              form.birth_year ? parseInt(form.birth_year, 10) : null,
         }, { onConflict: 'user_id' })
       if (e2) throw e2
 
@@ -214,6 +229,20 @@ export default function PatientProfile() {
                   }
                 </div>
               ))}
+
+              <div>
+                <p className="text-xs text-gray-500 mb-1 flex items-center gap-1">
+                  <Calendar className="w-3 h-3"/> Birth Year
+                </p>
+                {editing
+                  ? <input inputMode="numeric" maxLength={4} placeholder="e.g., 1998"
+                      value={form.birth_year}
+                      onChange={e => setForm(f => ({...f, birth_year: e.target.value.replace(/\D/g, '').slice(0, 4)}))}
+                      className="input text-sm"/>
+                  : <p className="font-semibold text-gray-800">{form.birth_year || '—'}</p>
+                }
+                <p className="text-xs text-gray-400 mt-1">Used to unlock your e-prescriptions.</p>
+              </div>
 
               <div className="sm:col-span-2">
                 <p className="text-xs text-gray-500 mb-1 flex items-center gap-1">

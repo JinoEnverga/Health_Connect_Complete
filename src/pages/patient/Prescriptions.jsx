@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { Link } from 'react-router-dom'
 import { FileText, Lock, ChevronDown, ChevronUp, Info, Download } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -27,6 +28,7 @@ function RxCard({ rx }) {
   const [error,    setError]    = useState('')
   const [attempts, setAttempts] = useState(0)
   const [locked,   setLocked]   = useState(false)
+  const [needsBirthYear, setNeedsBirthYear] = useState(false)
   const cooldownTimer = useRef(null)
 
   useEffect(() => () => clearTimeout(cooldownTimer.current), [])
@@ -41,6 +43,9 @@ function RxCard({ rx }) {
     if (!data.success) {
       setChecking(false)
       setCode('')
+      // Not the patient's fault, and no birth year they could possibly
+      // enter would fix it — don't burn an attempt or lock them out.
+      if (data.code === 'no_birth_year_set') { setNeedsBirthYear(true); return }
       const next = attempts + 1
       setAttempts(next)
       if (next >= MAX_ATTEMPTS) {
@@ -109,23 +114,34 @@ function RxCard({ rx }) {
       {expanded && (
         <div className="mt-3">
           {!unlocked ? (
-            <div className="bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl p-5 text-center">
-              <div className="w-12 h-12 bg-white border border-gray-200 rounded-full flex items-center justify-center mx-auto mb-3">
-                <Lock className="w-5 h-5 text-gray-400"/>
+            needsBirthYear ? (
+              <div className="bg-amber-50 border-2 border-dashed border-amber-200 rounded-xl p-5 text-center">
+                <div className="w-12 h-12 bg-white border border-amber-200 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <Lock className="w-5 h-5 text-amber-500"/>
+                </div>
+                <p className="text-sm font-semibold text-gray-700 mb-1">No birth year on file yet</p>
+                <p className="text-xs text-gray-500 mb-4">Add your birth year to your profile, then come back to unlock this.</p>
+                <Link to="/profile" className="btn-primary-patient inline-flex px-5 py-2 text-sm">Go to Profile</Link>
               </div>
-              <p className="text-sm font-semibold text-gray-700 mb-1">This document is locked</p>
-              <p className="text-xs text-gray-500 mb-4">Enter your 4-digit Birth Year to unlock it.</p>
-              <div className="flex justify-center items-center gap-2">
-                <input
-                  inputMode="numeric" maxLength={4} placeholder="YYYY" autoFocus
-                  disabled={locked || checking}
-                  value={code}
-                  onChange={e => handleCodeChange(e.target.value)}
-                  className="input text-center w-28 tracking-widest disabled:opacity-50"/>
-                {checking && <div className="w-5 h-5 border-2 border-patient-600 border-t-transparent rounded-full animate-spin"/>}
+            ) : (
+              <div className="bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl p-5 text-center">
+                <div className="w-12 h-12 bg-white border border-gray-200 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <Lock className="w-5 h-5 text-gray-400"/>
+                </div>
+                <p className="text-sm font-semibold text-gray-700 mb-1">This document is locked</p>
+                <p className="text-xs text-gray-500 mb-4">Enter your 4-digit Birth Year to unlock it.</p>
+                <div className="flex justify-center items-center gap-2">
+                  <input
+                    inputMode="numeric" maxLength={4} placeholder="YYYY" autoFocus
+                    disabled={locked || checking}
+                    value={code}
+                    onChange={e => handleCodeChange(e.target.value)}
+                    className="input text-center w-28 tracking-widest disabled:opacity-50"/>
+                  {checking && <div className="w-5 h-5 border-2 border-patient-600 border-t-transparent rounded-full animate-spin"/>}
+                </div>
+                {error && <p className="text-red-600 text-xs mt-2.5">{error}</p>}
               </div>
-              {error && <p className="text-red-600 text-xs mt-2.5">{error}</p>}
-            </div>
+            )
           ) : (
             <div className="space-y-3">
               {details.file_path && (

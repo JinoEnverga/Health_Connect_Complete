@@ -1,0 +1,24 @@
+-- PROPOSAL — do not run without deciding first. Named _PROPOSAL on
+-- purpose so it doesn't get swept into "just run all the new files."
+--
+-- Context: verify_prescription started as web's (p_token, p_birth_year)
+-- function backing a public "pharmacist verification" page. That page and
+-- the whole online-handoff concept were deliberately removed from web —
+-- prescriptions are now a downloaded file the patient handles offline.
+-- Mobile then overwrote the function with their own (p_token, p_pin)
+-- version (PIN comparison + lockout + dispense-on-success) before seeing
+-- that web had moved on, and has now said dispensing isn't part of their
+-- system either. So: nothing currently calls this function from either
+-- codebase, and neither team owns it.
+--
+-- Recommendation: drop it, rather than leave a function around that
+-- half-belongs to two different, contradictory designs (birth year vs.
+-- PIN) that nobody is maintaining. But this is a live function on a
+-- shared database another team just modified — worth an explicit "go
+-- ahead" from both sides before it happens, not something to run because
+-- it was sitting in a batch of otherwise-routine fixes.
+--
+-- If anyone still calls it under either signature, check first:
+--   select oid::regprocedure from pg_proc where proname = 'verify_prescription';
+
+drop function if exists public.verify_prescription(text, text);

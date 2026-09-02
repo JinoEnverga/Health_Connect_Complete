@@ -94,13 +94,21 @@ export default function AIScanner() {
         let storedUrl = imageUrl
         try {
           const path = `${user.id}/${Date.now()}_${imageFile.name}`
-          const { data: up } = await supabase.storage
+          const { data: up, error: upErr } = await supabase.storage
             .from('ai-scans').upload(path, imageFile, { upsert: true })
+          if (upErr) throw upErr
           if (up?.path) {
             const { data: pub } = supabase.storage.from('ai-scans').getPublicUrl(up.path)
             storedUrl = pub.publicUrl
           }
-        } catch (_) { /* Storage bucket not set up yet — skip silently */ }
+        } catch (uploadErr) {
+          // Falls back to a browser-local blob: URL, which only resolves in
+          // this tab/session — it will be dead in the database for anyone
+          // (including the mobile app) who reads it back later. Logged
+          // instead of swallowed so a storage regression doesn't silently
+          // recur the way the missing bucket previously did.
+          console.warn('ai-scans upload failed, image_url will not persist:', uploadErr)
+        }
 
         await supabase.from('ai_scan_results').insert({
           patient_id:     user.id,
