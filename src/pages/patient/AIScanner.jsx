@@ -4,8 +4,16 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 
 // ─────────────────────────────────────────────────────────────
-//  Flask API — your HAM10000 EfficientNetB3 model
-//  Make sure api.py is running first:  python api.py
+//  Flask API — source at C:\Users\enver\Desktop\skin_model\api.py,
+//  deployed on Render. 8-class skin infection model (bacterial/
+//  fungal/parasitic/viral), trained on the Kaggle "Skin Disease
+//  Dataset", EfficientNetB3, served from a .tflite export.
+//  Same URL as the old HAM10000 model — that one's retired, this is
+//  a redeploy of the same Render service with the new model.
+//
+//  Render free tier sleeps when idle: the first request after a
+//  quiet period can take ~30s to cold-start (handled below in the
+//  catch block's error message).
 // ─────────────────────────────────────────────────────────────
 const AI_API_URL = 'https://healthconnect-ai-api.onrender.com/predict'
 
@@ -114,6 +122,10 @@ export default function AIScanner() {
           patient_id:     user.id,
           image_url:      storedUrl,
           image_filename: imageFile.name,
+          // Explicit now instead of relying on the column default — that
+          // default ('EfficientNetB0-HAM10000-v1') described the old model
+          // and was already stale before this switch.
+          model_version: 'skin-disease-8class-effnetb3-v1',
           // Store as the same array shape our schema expects
           predictions: data.all_scores.map(s => ({
             label:      s.label,
@@ -169,7 +181,7 @@ export default function AIScanner() {
         </div>
         <div>
           <h1 className="text-2xl font-bold text-gray-900">AI Health Scanner</h1>
-          <p className="text-gray-500 text-sm">Skin disease detection — HAM10000 EfficientNetB3</p>
+          <p className="text-gray-500 text-sm">Skin infection detection — bacterial, fungal, parasitic &amp; viral</p>
         </div>
       </div>
 
@@ -185,7 +197,7 @@ export default function AIScanner() {
       {/* ── Tool tabs ── */}
       <div className="flex gap-3 overflow-x-auto pb-1">
         {[
-          { label: 'Skin Analyzer',        badge: 'HAM10000', active: true  },
+          { label: 'Skin Analyzer',        badge: '8 conditions', active: true  },
           { label: 'Prescription Scanner', coming: true },
           { label: 'Wound Analyzer',       coming: true },
           { label: 'Pill Identifier',      coming: true },
@@ -210,10 +222,11 @@ export default function AIScanner() {
           <div className="flex items-center gap-2">
             <Cpu className="w-4 h-4 text-patient-600"/>
             <h2 className="font-bold text-gray-900">Skin Analyzer</h2>
-            <span className="text-xs bg-patient-100 text-patient-700 px-2 py-0.5 rounded-full font-bold">HAM10000</span>
+            <span className="text-xs bg-patient-100 text-patient-700 px-2 py-0.5 rounded-full font-bold">8 conditions</span>
           </div>
           <p className="text-xs text-gray-500">
-            Upload a dermoscopy or skin photo — analyzed by our trained HAM10000 EfficientNetB3 model.
+            Upload a skin photo — checked against bacterial, fungal, parasitic, and viral infection patterns
+            (cellulitis, impetigo, athlete's foot, nail fungus, ringworm, cutaneous larva migrans, chickenpox, shingles).
           </p>
 
           {/* Drop zone */}
@@ -341,7 +354,7 @@ export default function AIScanner() {
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <div className="w-16 h-16 border-4 border-patient-200 border-t-patient-600 rounded-full animate-spin mb-4"/>
               <p className="font-semibold text-gray-700">Analyzing image...</p>
-              <p className="text-gray-400 text-sm mt-1">Running EfficientNetB3 — HAM10000</p>
+              <p className="text-gray-400 text-sm mt-1">Running EfficientNetB3 — 8-class skin infection model</p>
             </div>
           )}
 
