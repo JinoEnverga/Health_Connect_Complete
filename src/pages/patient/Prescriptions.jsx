@@ -163,7 +163,10 @@ function RxCard({ rx }) {
               )}
 
               {isImage && details.downloadUrl && (
-                <img src={details.downloadUrl} alt="Prescription" className="w-full rounded-xl border border-gray-200"/>
+                <div className="flex justify-center bg-gray-50 rounded-xl border border-gray-200 p-2">
+                  <img src={details.downloadUrl} alt="Prescription"
+                    className="max-h-80 w-auto max-w-full object-contain rounded-lg"/>
+                </div>
               )}
 
               {/* Legacy prescriptions issued before file upload still show their itemized medications */}
