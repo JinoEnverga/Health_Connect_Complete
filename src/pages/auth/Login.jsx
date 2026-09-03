@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Eye, EyeOff, User, Stethoscope, Shield, ShieldCheck, Mail, ArrowLeft } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
-import { supabase, verifyPasswordOnly } from '../../lib/supabase'
+import { supabase, verifyPasswordOnly, fetchRoleForUser } from '../../lib/supabase'
 
 const PORTALS = [
   {
@@ -85,9 +85,16 @@ export default function Login() {
     e.preventDefault()
     setLoading(true); setError('')
     try {
-      if (isAdminPortal) {
-        const check = await verifyPasswordOnly(form.email, form.password)
-        if (!check.ok) { setError(check.error); return }
+      // Checked for every submission, regardless of which portal tab is
+      // selected — gating only when isAdminPortal was true meant an admin
+      // account could skip the code entirely by logging in from the
+      // Patient/Doctor/BHW tab instead. The account's real role decides
+      // this now, not the tab.
+      const check = await verifyPasswordOnly(form.email, form.password)
+      if (!check.ok) { setError(check.error); return }
+
+      const role = await fetchRoleForUser(check.accessToken, check.userId)
+      if (role === 'admin') {
         await sendAdminCode()
         setStage('otp')
         startResendCooldown()

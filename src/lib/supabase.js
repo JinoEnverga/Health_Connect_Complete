@@ -23,5 +23,20 @@ export async function verifyPasswordOnly(email, password) {
   if (!res.ok) {
     return { ok: false, error: data.error_description || data.msg || 'Invalid email or password.' }
   }
-  return { ok: true }
+  return { ok: true, accessToken: data.access_token, userId: data.user?.id }
+}
+
+// Looks up an authenticated-but-not-yet-signed-in user's real, current role
+// straight from `profiles`, using the throwaway token from
+// verifyPasswordOnly (never touches the shared client). This is what
+// decides whether the admin 2-step flow applies — checked by ACCOUNT role,
+// not by which portal tab the form was submitted from, so an admin can't
+// skip the code by logging in via Patient/Doctor/BHW instead of Admin.
+export async function fetchRoleForUser(accessToken, userId) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=role&id=eq.${userId}`, {
+    headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${accessToken}` },
+  })
+  if (!res.ok) return null
+  const rows = await res.json().catch(() => [])
+  return rows?.[0]?.role ?? null
 }
