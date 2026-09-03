@@ -1,49 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { Eye, EyeOff, User, Stethoscope, Shield, ShieldCheck, Mail, ArrowLeft } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { Eye, EyeOff, Mail, ArrowLeft } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase, verifyPasswordOnly, fetchRoleForUser } from '../../lib/supabase'
-
-const PORTALS = [
-  {
-    role: 'patient', label: 'Patient Portal',
-    icon: User, bg: 'bg-patient-600', hover: 'hover:bg-patient-700',
-    activeBorder: 'border-patient-300 bg-patient-50',
-    gradient: 'from-patient-50 via-white to-blue-50',
-    inputClass: 'focus:ring-patient-500',
-  },
-  {
-    role: 'doctor', label: 'Doctor Portal',
-    icon: Stethoscope, bg: 'bg-doctor-600', hover: 'hover:bg-doctor-700',
-    activeBorder: 'border-doctor-300 bg-doctor-50',
-    gradient: 'from-doctor-50 via-white to-emerald-50',
-    inputClass: 'focus:ring-doctor-500',
-  },
-  {
-    role: 'bhw', label: 'BHW Portal',
-    icon: Shield, bg: 'bg-bhw-600', hover: 'hover:bg-bhw-700',
-    activeBorder: 'border-bhw-300 bg-bhw-50',
-    gradient: 'from-bhw-50 via-white to-teal-50',
-    inputClass: 'focus:ring-bhw-500',
-  },
-  {
-    role: 'admin', label: 'Admin Portal',
-    icon: ShieldCheck, bg: 'bg-admin-600', hover: 'hover:bg-admin-700',
-    activeBorder: 'border-admin-300 bg-admin-50',
-    gradient: 'from-admin-50 via-white to-green-50',
-    inputClass: 'focus:ring-admin-500',
-  },
-]
+import TelemedicineLogo from '../../components/TelemedicineLogo'
 
 const RESEND_COOLDOWN_S = 30
 
 export default function Login() {
   const navigate    = useNavigate()
-  const [params]    = useSearchParams()
   const { signIn }  = useAuth()
-
-  const currentRole  = PORTALS.find(p => p.role === params.get('role')) ?? PORTALS[0]
-  const isAdminPortal = currentRole.role === 'admin'
 
   const [form, setForm] = useState({ email: '', password: '', remember: false })
   const [showPw, setShowPw] = useState(false)
@@ -51,9 +17,13 @@ export default function Login() {
   const [error, setError]     = useState('')
 
   // Admin 2-step: 'credentials' (email+password) -> 'otp' (email code).
-  // Only the OTP step actually creates a session — see verifyPasswordOnly's
-  // comment in src/lib/supabase.js for why the password check itself
-  // doesn't touch the shared Supabase client.
+  // Which account is an admin is decided by its real role (checked in
+  // handleSubmit), not by anything picked on this page — there's no portal
+  // selector anymore, since it never actually restricted which portal you
+  // landed in; RoleRedirect in App.jsx always sends you to your own
+  // account's real home regardless. Only the OTP step actually creates a
+  // session — see verifyPasswordOnly's comment in src/lib/supabase.js for
+  // why the password check itself doesn't touch the shared Supabase client.
   const [stage, setStage]   = useState('credentials')
   const [otp, setOtp]       = useState('')
   const [otpError, setOtpError] = useState('')
@@ -85,11 +55,6 @@ export default function Login() {
     e.preventDefault()
     setLoading(true); setError('')
     try {
-      // Checked for every submission, regardless of which portal tab is
-      // selected — gating only when isAdminPortal was true meant an admin
-      // account could skip the code entirely by logging in from the
-      // Patient/Doctor/BHW tab instead. The account's real role decides
-      // this now, not the tab.
       const check = await verifyPasswordOnly(form.email, form.password)
       if (!check.ok) { setError(check.error); return }
 
@@ -136,17 +101,13 @@ export default function Login() {
     }
   }
 
-  const Icon = currentRole.icon
-
   return (
-    <div className={`min-h-screen flex flex-col items-center justify-center px-4 bg-gradient-to-br ${currentRole.gradient}`}>
+    <div className="min-h-screen flex flex-col items-center justify-center px-4 bg-gradient-to-br from-blue-50 via-white to-slate-50">
       {/* Logo */}
       <div className="mb-8 text-center">
-        <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg ${currentRole.bg}`}>
-          <Icon className="w-8 h-8 text-white"/>
-        </div>
+        <TelemedicineLogo className="w-16 h-16 mx-auto mb-4 shadow-lg rounded-2xl"/>
         <h1 className="text-3xl font-bold text-gray-900">HealthConnect</h1>
-        <p className="text-gray-500 mt-1">{currentRole.label}</p>
+        <p className="text-gray-500 mt-1">Sign in to your account</p>
       </div>
 
       {/* Card */}
@@ -154,9 +115,7 @@ export default function Login() {
         {stage === 'credentials' ? (
           <>
             <h2 className="text-2xl font-bold text-gray-900 mb-1">Welcome back</h2>
-            <p className="text-gray-500 text-sm mb-6">
-              {isAdminPortal ? "Sign in — you'll also need a code we email you" : 'Sign in to access your health portal'}
-            </p>
+            <p className="text-gray-500 text-sm mb-6">Sign in to access your health portal</p>
 
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm mb-4">
@@ -208,10 +167,10 @@ export default function Login() {
               </div>
 
               <button type="submit" disabled={loading}
-                className={`w-full mt-2 py-3 rounded-xl font-semibold text-white transition-all flex items-center justify-center gap-2 ${currentRole.bg} ${currentRole.hover}`}>
+                className="w-full mt-2 py-3 rounded-xl font-semibold text-white transition-all flex items-center justify-center gap-2 bg-patient-600 hover:bg-patient-700">
                 {loading
                   ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"/>
-                  : (isAdminPortal ? 'Continue' : 'Sign In')}
+                  : 'Sign In'}
               </button>
             </form>
 
@@ -254,7 +213,7 @@ export default function Login() {
               </div>
 
               <button type="submit" disabled={verifying || !otp}
-                className={`w-full py-3 rounded-xl font-semibold text-white transition-all flex items-center justify-center gap-2 ${currentRole.bg} ${currentRole.hover} disabled:opacity-50`}>
+                className="w-full py-3 rounded-xl font-semibold text-white transition-all flex items-center justify-center gap-2 bg-admin-600 hover:bg-admin-700 disabled:opacity-50">
                 {verifying
                   ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"/>
                   : 'Verify & Sign In'}
@@ -271,40 +230,6 @@ export default function Login() {
           </>
         )}
       </div>
-
-      {/* Portal switcher — 2 × 2 grid */}
-      {stage === 'credentials' && (
-        <div className="mt-6 w-full max-w-md">
-          <p className="text-center text-xs text-gray-400 uppercase tracking-wider font-semibold mb-3">
-            Sign in to a different portal
-          </p>
-          <div className="grid grid-cols-2 gap-3">
-            {PORTALS.map(p => {
-              const PIcon   = p.icon
-              const active  = p.role === currentRole.role
-              return (
-                <Link key={p.role}
-                  to={p.role === 'patient' ? '/login' : `/login?role=${p.role}`}
-                  className={`flex items-center gap-2.5 px-4 py-3 rounded-xl border-2 transition-all ${
-                    active
-                      ? `${p.activeBorder} border-2`
-                      : 'border-gray-100 bg-white hover:border-gray-200 hover:bg-gray-50'
-                  }`}>
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${p.bg}`}>
-                    <PIcon className="w-4 h-4 text-white"/>
-                  </div>
-                  <div className="min-w-0">
-                    <p className={`text-xs font-bold truncate ${active ? 'text-gray-900' : 'text-gray-600'}`}>
-                      {p.label}
-                    </p>
-                    {active && <p className="text-xs text-gray-400">Current</p>}
-                  </div>
-                </Link>
-              )
-            })}
-          </div>
-        </div>
-      )}
     </div>
   )
 }

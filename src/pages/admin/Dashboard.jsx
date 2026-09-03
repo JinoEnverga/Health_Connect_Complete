@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Users, Shield, Stethoscope, Calendar, Pill,
+  Users, Shield, Stethoscope,
   ChevronRight, Megaphone, ClipboardList, RefreshCw, ShieldCheck
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
@@ -38,7 +38,7 @@ function ManagementItem({ icon: Icon, iconBg, iconColor, title, subtitle, to }) 
 export default function AdminDashboard() {
   const { profile } = useAuth()
   const navigate    = useNavigate()
-  const [stats, setStats]   = useState({ patients: 0, bhws: 0, doctors: 0, appts: 0, rx: 0 })
+  const [stats, setStats]   = useState({ patients: 0, bhws: 0, doctors: 0 })
   const [loading, setLoading] = useState(true)
 
   const firstName = profile?.first_name || 'Admin'
@@ -47,18 +47,12 @@ export default function AdminDashboard() {
 
   async function load() {
     setLoading(true)
-    const [profRes, apptRes, rxRes] = await Promise.all([
-      supabase.from('profiles').select('role'),
-      supabase.from('appointments').select('id', { count: 'exact', head: true }),
-      supabase.from('prescriptions').select('id', { count: 'exact', head: true }),
-    ])
-    const profiles = profRes.data || []
+    const { data } = await supabase.from('profiles').select('role')
+    const profiles = data || []
     setStats({
       patients: profiles.filter(p => p.role === 'patient').length,
       bhws:     profiles.filter(p => p.role === 'bhw').length,
       doctors:  profiles.filter(p => p.role === 'doctor').length,
-      appts:    apptRes.count || 0,
-      rx:       rxRes.count || 0,
     })
     setLoading(false)
   }
@@ -97,7 +91,7 @@ export default function AdminDashboard() {
         </h2>
         {loading ? (
           <div className="grid grid-cols-3 gap-3">
-            {[1,2,3,4,5].map(i => <div key={i} className="h-28 bg-gray-100 rounded-2xl animate-pulse"/>)}
+            {[1,2,3].map(i => <div key={i} className="h-28 bg-gray-100 rounded-2xl animate-pulse"/>)}
           </div>
         ) : (
           <div className="grid grid-cols-3 gap-3">
@@ -115,14 +109,6 @@ export default function AdminDashboard() {
               icon={Stethoscope} value={stats.doctors}  label="Doctors"
               color="text-blue-600"    bg="bg-blue-50"
               onClick={() => navigate('/admin/users')}
-            />
-            <StatCard
-              icon={Calendar}    value={stats.appts}    label="Appts"
-              color="text-orange-500"  bg="bg-orange-50"
-            />
-            <StatCard
-              icon={Pill}        value={stats.rx}       label="Rx Issued"
-              color="text-purple-600"  bg="bg-purple-50"
             />
           </div>
         )}
