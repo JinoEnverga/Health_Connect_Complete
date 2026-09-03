@@ -240,13 +240,13 @@ export default function Login() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1 text-center">Verification Code</label>
                 <input
-                  inputMode="numeric" autoFocus maxLength={6} placeholder="••••••"
+                  inputMode="numeric" autoFocus maxLength={12} placeholder="Enter the code from your email"
                   value={otp}
-                  onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  className="input text-center text-2xl tracking-[0.5em] font-bold"/>
+                  onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 12))}
+                  className="input text-center text-2xl tracking-widest font-bold"/>
               </div>
 
-              <button type="submit" disabled={verifying || otp.length < 6}
+              <button type="submit" disabled={verifying || !otp}
                 className={`w-full py-3 rounded-xl font-semibold text-white transition-all flex items-center justify-center gap-2 ${currentRole.bg} ${currentRole.hover} disabled:opacity-50`}>
                 {verifying
                   ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"/>
