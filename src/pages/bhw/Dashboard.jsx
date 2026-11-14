@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Heart, Search, QrCode, History, UserPlus,
+  Heart, Search, History, UserPlus,
   Users, RefreshCw, Shield
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
@@ -87,12 +87,12 @@ export default function BHWDashboard() {
             onClick={() => navigate('/bhw/patients')}
           />
           <QuickAction
-            icon={QrCode}
-            label="Scan Prescription"
+            icon={UserPlus}
+            label="Register Patient"
             color="text-blue-500"
             bg="bg-blue-50"
             border="border-blue-100"
-            onClick={() => navigate('/bhw/scan-prescription')}
+            onClick={() => navigate('/bhw/register-patient')}
           />
           <QuickAction
             icon={History}

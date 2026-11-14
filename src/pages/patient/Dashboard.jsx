@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { Search, Calendar, Video, TrendingUp, Clock, CheckCircle, Users, Activity } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import QueueStatusCard from '../../components/patient/QueueStatusCard'
+import { isActive, statusMeta, relativeDay } from '../../lib/queue'
 
 function StatCard({ icon: Icon, value, label, sub, color }) {
   return (
@@ -56,11 +58,14 @@ export default function PatientDashboard() {
       ])
       const all = appts.data || []
       setStats({
-        upcoming:  all.filter(a => a.status === 'upcoming').length,
+        upcoming:  all.filter(a => isActive(a.status)).length,
         completed: all.filter(a => a.status === 'completed').length,
         doctors:   doctors.data?.length || 0,
       })
-      setUpcomingAppts(all.filter(a => a.status === 'upcoming').slice(0, 3))
+      setUpcomingAppts(all
+        .filter(a => isActive(a.status))
+        .sort((x, y) => (x.appointment_date || '').localeCompare(y.appointment_date || ''))
+        .slice(0, 3))
       setLatestVitals(vitals.data?.[0] || null)
       setLoading(false)
     }
@@ -88,6 +93,9 @@ export default function PatientDashboard() {
         <StatCard icon={Users}        value={stats.doctors}   label="Doctors"        sub="Available now"   color="bg-purple-500"/>
         <StatCard icon={Activity}     value={latestVitals ? `${latestVitals.heart_rate||'—'} bpm` : '—'} label="Heart Rate" sub="Latest reading" color="bg-orange-500"/>
       </div>
+
+      {/* Live queue position(s) — renders nothing without an active queue spot */}
+      <QueueStatusCard userId={user?.id}/>
 
       {/* Quick Actions */}
       <div>
@@ -130,11 +138,13 @@ export default function PatientDashboard() {
                   <Calendar className="w-5 h-5 text-patient-600"/>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-900 text-sm">{a.appointment_date}</p>
+                  <p className="font-semibold text-gray-900 text-sm">
+                    {relativeDay(a.appointment_date)}{a.queue_number ? ` · Queue #${a.queue_number}` : ''}
+                  </p>
                   <p className="text-gray-500 text-xs">{a.time_slot} • {a.chief_complaint || 'Consultation'}</p>
                 </div>
                 <div className="flex flex-col items-end gap-1.5 shrink-0">
-                  <span className="badge-active">Upcoming</span>
+                  <span className={`text-xs font-semibold px-2 py-1 rounded-full ${statusMeta(a.status).cls}`}>{statusMeta(a.status).label}</span>
                   <button onClick={() => navigate('/teleconsultation', { state: { appointment: a } })}
                     className="flex items-center gap-1 text-xs text-patient-600 font-semibold hover:underline">
                     <Video className="w-3 h-3"/> Join Call

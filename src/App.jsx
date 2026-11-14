@@ -26,6 +26,7 @@ import IssuePrescription   from './pages/doctor/IssuePrescription'
 import AllPrescriptions    from './pages/doctor/AllPrescriptions'
 import DoctorTeleconsultation from './pages/doctor/Teleconsultation'
 import DoctorProfile       from './pages/doctor/DoctorProfile'
+import DoctorAvailability  from './pages/doctor/Availability'
 
 // BHW
 import BHWLayout           from './pages/bhw/BHWLayout'
@@ -33,7 +34,6 @@ import BHWDashboard        from './pages/bhw/Dashboard'
 import BHWPatients         from './pages/bhw/Patients'
 import BHWRecordVitals     from './pages/bhw/RecordVitals'
 import BHWRegisterPatient  from './pages/bhw/RegisterPatient'
-import BHWScanPrescription from './pages/bhw/ScanPrescription'
 import BHWMedicalHistory   from './pages/bhw/MedicalHistory'
 
 // Admin
@@ -100,6 +100,7 @@ export default function App() {
           <Route path="/doctor" element={<ProtectedRoute role="doctor"><DoctorLayout /></ProtectedRoute>}>
             <Route path="dashboard"     element={<DoctorDashboard />} />
             <Route path="appointments"  element={<DoctorAppointments />} />
+            <Route path="availability"  element={<DoctorAvailability />} />
             <Route path="prescribe"     element={<IssuePrescription />} />
             <Route path="prescriptions" element={<AllPrescriptions />} />
             <Route path="teleconsultation" element={<DoctorTeleconsultation />} />
@@ -112,7 +113,6 @@ export default function App() {
             <Route path="patients"          element={<BHWPatients />} />
             <Route path="record-vitals"     element={<BHWRecordVitals />} />
             <Route path="register-patient"  element={<BHWRegisterPatient />} />
-            <Route path="scan-prescription" element={<BHWScanPrescription />} />
             <Route path="medical-history"   element={<BHWMedicalHistory />} />
           </Route>
 

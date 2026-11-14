@@ -118,7 +118,7 @@ export default function AIScanner() {
           console.warn('ai-scans upload failed, image_url will not persist:', uploadErr)
         }
 
-        await supabase.from('ai_scan_results').insert({
+        const { error: saveErr } = await supabase.from('ai_scan_results').insert({
           patient_id:     user.id,
           image_url:      storedUrl,
           image_filename: imageFile.name,
@@ -127,7 +127,7 @@ export default function AIScanner() {
           // and was already stale before this switch.
           model_version: 'skin-disease-8class-effnetb3-v1',
           // Store as the same array shape our schema expects
-          predictions: data.all_scores.map(s => ({
+          predictions: (data.all_scores || []).map(s => ({
             label:      s.label,
             confidence: s.confidence / 100,  // store as 0–1 in DB
           })),
@@ -135,7 +135,11 @@ export default function AIScanner() {
           top_confidence: data.prediction.confidence / 100,
           disclaimer_acknowledged: true,
         })
-        setSaved(true)
+        // The analysis itself succeeded, so show it either way — only the
+        // history save failed. Don't fall through to the "server waking up"
+        // message in the catch below, which would be misleading here.
+        if (saveErr) console.warn('Could not save scan result to history:', saveErr)
+        else setSaved(true)
       }
     } catch (err) {
       setError(

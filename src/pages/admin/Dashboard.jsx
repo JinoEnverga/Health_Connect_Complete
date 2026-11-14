@@ -122,7 +122,7 @@ export default function AdminDashboard() {
         <div className="space-y-3">
           <ManagementItem
             icon={Users}       iconBg="bg-bhw-100"    iconColor="text-bhw-600"
-            title="User Management"  subtitle="View, activate, or deactivate"
+            title="User Management"  subtitle="View and search all users"
             to="/admin/users"
           />
           <ManagementItem

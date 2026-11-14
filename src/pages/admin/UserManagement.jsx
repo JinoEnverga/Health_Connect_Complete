@@ -17,7 +17,7 @@ export default function UserManagement() {
   const [query, setQuery]       = useState('')
   const [roleTab, setRoleTab]   = useState('all')
   const [loading, setLoading]   = useState(true)
-  const [toggling, setToggling] = useState(null)
+  const [error, setError]       = useState('')
 
   useEffect(() => { load() }, [])
 
@@ -35,22 +35,15 @@ export default function UserManagement() {
   }, [query, roleTab, users])
 
   async function load() {
-    setLoading(true)
-    const { data } = await supabase
+    setLoading(true); setError('')
+    const { data, error: loadErr } = await supabase
       .from('profiles')
       .select('id, role, first_name, last_name, email, created_at')
       .order('created_at', { ascending: false })
-    const enriched = (data || []).map(u => ({ ...u, is_active: true }))
-    setUsers(enriched)
-    setFiltered(enriched)
+    if (loadErr) setError(`Could not load users: ${loadErr.message}`)
+    setUsers(data || [])
+    setFiltered(data || [])
     setLoading(false)
-  }
-
-  async function toggleActive(userId, current) {
-    setToggling(userId)
-    setUsers(prev => prev.map(u => u.id === userId ? { ...u, is_active: !current } : u))
-    await new Promise(r => setTimeout(r, 400))
-    setToggling(null)
   }
 
   const counts = ROLES.reduce((acc, r) => {
@@ -106,6 +99,10 @@ export default function UserManagement() {
         ))}
       </div>
 
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">{error}</div>
+      )}
+
       {/* Users list */}
       {loading ? (
         <div className="space-y-3">
@@ -139,17 +136,6 @@ export default function UserManagement() {
                     {u.role === 'bhw' ? 'BHW' : u.role === 'admin' ? 'Admin' : u.role}
                   </span>
                 </div>
-                {/* Active toggle */}
-                <button
-                  onClick={() => toggleActive(u.id, u.is_active)}
-                  disabled={toggling === u.id}
-                  className={`relative w-11 h-6 rounded-full transition-all shrink-0 ${
-                    u.is_active ? 'bg-bhw-600' : 'bg-gray-300'
-                  } ${toggling === u.id ? 'opacity-50' : ''}`}>
-                  <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${
-                    u.is_active ? 'left-[22px]' : 'left-0.5'
-                  }`}/>
-                </button>
               </div>
             )
           })}

@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react'
-import { ClipboardList, RefreshCw, Search, Calendar, User, FileText, Heart, Stethoscope } from 'lucide-react'
+import { ClipboardList, RefreshCw, Search, Calendar, User, FileText, Heart, Stethoscope, PhoneCall } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { formatDuration } from '../../components/shared/CallHistory'
 
-const EVENT_TYPES = ['all', 'appointment', 'prescription', 'vitals', 'profile']
+const EVENT_TYPES = ['all', 'call', 'appointment', 'prescription', 'vitals', 'profile']
 
 const eventIcon = {
+  call:         PhoneCall,
   appointment:  Calendar,
   prescription: FileText,
   vitals:       Heart,
@@ -12,6 +14,7 @@ const eventIcon = {
 }
 
 const eventColor = {
+  call:         'text-emerald-600 bg-emerald-50',
   appointment:  'text-orange-500 bg-orange-50',
   prescription: 'text-purple-600 bg-purple-50',
   vitals:       'text-red-500 bg-red-50',
@@ -42,7 +45,12 @@ export default function AuditLogs() {
 
   async function load() {
     setLoading(true)
-    const [apptRes, rxRes, vitalsRes] = await Promise.all([
+    const [callRes, apptRes, rxRes, vitalsRes, printRes] = await Promise.all([
+      supabase.from('call_logs')
+        .select(`id, status, initiated_at, duration_seconds, end_reason,
+          doctor:profiles!call_logs_doctor_id_fkey(first_name, last_name),
+          patient:profiles!call_logs_patient_id_fkey(first_name, last_name)`)
+        .order('initiated_at', { ascending: false }).limit(30),
       supabase.from('appointments')
         .select('id, status, created_at, profiles!appointments_patient_id_fkey(first_name, last_name)')
         .order('created_at', { ascending: false }).limit(15),
@@ -52,9 +60,27 @@ export default function AuditLogs() {
       supabase.from('vitals')
         .select('id, created_at, patient_id, profiles!vitals_patient_id_fkey(first_name, last_name)')
         .order('created_at', { ascending: false }).limit(15),
+      supabase.from('prescription_print_log')
+        .select('id, event, copy_number, max_prints, copy_label, reason, created_at, actor:profiles!prescription_print_log_actor_id_fkey(first_name, last_name)')
+        .order('created_at', { ascending: false }).limit(30),
     ])
 
+    const callTitle = c => ({
+      ringing:   'Call ringing',
+      active:    'Call in progress',
+      ended:     `Call completed${c.duration_seconds != null ? ` (${formatDuration(c.duration_seconds)})` : ''}`,
+      cancelled: 'Call cancelled before answer',
+      missed:    'Call missed',
+    }[c.status] || `Call ${c.status}`)
+    const nm = p => p ? `${p.first_name || ''} ${p.last_name || ''}`.trim() : ''
+
     const combined = [
+      ...(callRes.data || []).map(c => ({
+        id: `call-${c.id}`, type: 'call',
+        title: callTitle(c),
+        user_name: `Dr. ${nm(c.doctor) || '—'} ↔ ${nm(c.patient) || 'Patient'}`,
+        created_at: c.initiated_at,
+      })),
       ...(apptRes.data || []).map(a => ({
         id: `appt-${a.id}`, type: 'appointment',
         title: `Appointment ${a.status}`,
@@ -66,6 +92,14 @@ export default function AuditLogs() {
         title: `Prescription: ${r.diagnosis || 'Issued'}`,
         user_name: r.profiles ? `${r.profiles.first_name} ${r.profiles.last_name}` : 'Patient',
         created_at: r.created_at,
+      })),
+      ...(printRes.data || []).map(l => ({
+        id: `rxprint-${l.id}`, type: 'prescription',
+        title: l.event === 'printed'
+          ? `Prescription printed — copy ${l.copy_number} of ${l.max_prints} (${l.copy_label})`
+          : `Prescription reprint authorized — ${l.reason}`,
+        user_name: l.event === 'printed' ? (nm(l.actor) || 'Patient') : `Dr. ${nm(l.actor) || '—'}`,
+        created_at: l.created_at,
       })),
       ...(vitalsRes.data || []).map(v => ({
         id: `vital-${v.id}`, type: 'vitals',

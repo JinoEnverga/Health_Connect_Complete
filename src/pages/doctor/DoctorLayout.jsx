@@ -2,14 +2,16 @@ import React, { useState } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Calendar, FileText, ClipboardList,
-  User, LogOut, Bell, Menu, CheckCircle, Video
+  User, LogOut, Bell, Menu, CheckCircle, Video, CalendarClock
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import TelemedicineLogo from '../../components/TelemedicineLogo'
+import IncomingCallBanner from '../../components/shared/IncomingCallBanner'
 
 const nav = [
   { to: '/doctor/dashboard',     icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/doctor/appointments',  icon: Calendar,        label: 'Appointments' },
+  { to: '/doctor/availability',  icon: CalendarClock,   label: 'Availability' },
   { to: '/doctor/teleconsultation', icon: Video,        label: 'Teleconsultation' },
   { to: '/doctor/prescribe',     icon: FileText,        label: 'Issue Prescription' },
   { to: '/doctor/prescriptions', icon: ClipboardList,   label: 'All Prescriptions' },
@@ -17,7 +19,7 @@ const nav = [
 ]
 
 export default function DoctorLayout() {
-  const { profile, signOut } = useAuth()
+  const { user, profile, signOut } = useAuth()
   const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
 
@@ -128,6 +130,7 @@ export default function DoctorLayout() {
         {/* Page content */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6">
           <Outlet />
+          {user && <IncomingCallBanner role="doctor" userId={user.id}/>}
         </main>
       </div>
     </div>

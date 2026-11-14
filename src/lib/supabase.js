@@ -5,6 +5,26 @@ const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON)
 
+// Exported for the rare call that must bypass the client — e.g. logging a
+// call hang-up from a `pagehide` handler with fetch({ keepalive: true }).
+export { SUPABASE_URL, SUPABASE_ANON }
+
+// A throwaway client whose session lives only in memory — never written to
+// localStorage and never seen by AuthContext. Used when a signed-in staff
+// member (e.g. a BHW) creates an account for someone else: calling
+// supabase.auth.signUp() on the shared client would replace the staff
+// member's session with the new user's and log them out.
+export function createIsolatedClient() {
+  return createClient(SUPABASE_URL, SUPABASE_ANON, {
+    auth: {
+      persistSession:     false,
+      autoRefreshToken:   false,
+      detectSessionInUrl: false,
+      storageKey:         'hc-isolated-signup',
+    },
+  })
+}
+
 // Checks an email/password pair against Supabase Auth WITHOUT creating a
 // session on the shared `supabase` client — used for admin 2-step login,
 // where the password must be confirmed before an email code is sent, but

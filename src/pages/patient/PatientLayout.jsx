@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import TelemedicineLogo from '../../components/TelemedicineLogo'
+import IncomingCallBanner from '../../components/shared/IncomingCallBanner'
 import BirthYearGate from '../../components/patient/BirthYearGate'
 
 const nav = [
@@ -20,7 +21,7 @@ const nav = [
 ]
 
 export default function PatientLayout() {
-  const { profile, signOut } = useAuth()
+  const { user, profile, signOut } = useAuth()
   const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
 
@@ -130,6 +131,7 @@ export default function PatientLayout() {
         {/* Page content */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6">
           <Outlet />
+          {user && <IncomingCallBanner role="patient" userId={user.id}/>}
         </main>
       </div>
     </div>

@@ -28,15 +28,17 @@ export function AuthProvider({ children }) {
 
       if (fetchingId.current !== authUser.id) return // user changed mid-fetch
 
-      if (data && KNOWN_ROLES.includes(data.role)) {
+      if (data) {
+        // The profiles row is the source of truth for the role. Never let
+        // user_metadata override it — users can edit their own metadata
+        // (supabase.auth.updateUser), so it isn't trustworthy for routing.
         setProfile(data)
       } else {
-        // Fallback to role in Supabase Auth metadata (set at sign-up)
+        // No profile row yet (e.g. the signup trigger hasn't finished) — use
+        // a minimal object so routing works. Only the non-privileged
+        // portals are accepted from metadata.
         const metaRole = authUser.user_metadata?.role
-        if (data) {
-          setProfile({ ...data, role: metaRole ?? data.role })
-        } else if (metaRole) {
-          // No profile row yet — use a minimal object so routing works
+        if (KNOWN_ROLES.includes(metaRole) && metaRole !== 'admin') {
           setProfile({ id: authUser.id, role: metaRole })
         }
       }
@@ -44,7 +46,9 @@ export function AuthProvider({ children }) {
       // Network error or timeout: fall back to auth metadata so the app is usable
       if (fetchingId.current === authUser.id) {
         const metaRole = authUser.user_metadata?.role
-        if (metaRole) setProfile({ id: authUser.id, role: metaRole })
+        if (KNOWN_ROLES.includes(metaRole) && metaRole !== 'admin') {
+          setProfile({ id: authUser.id, role: metaRole })
+        }
       }
     } finally {
       // profileReady is set unconditionally — the spinner ALWAYS clears

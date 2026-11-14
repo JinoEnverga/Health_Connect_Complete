@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react'
 import { Edit3, Save, X, Star, Clock, MapPin, Phone, CheckCircle, DollarSign } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 
 const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
 const DAY_FULL = { Mon:'Monday', Tue:'Tuesday', Wed:'Wednesday', Thu:'Thursday', Fri:'Friday', Sat:'Saturday', Sun:'Sunday' }
-
-const TIME_SLOTS = ['8:00 AM','9:00 AM','10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM']
 
 const SPECIALIZATIONS = [
   'General Practice','Internal Medicine','Cardiology','Dermatology','Neurology',
@@ -62,15 +61,6 @@ export default function DoctorProfile() {
       available_days: f.available_days.includes(DAY_FULL[d])
         ? f.available_days.filter(x => x !== DAY_FULL[d])
         : [...f.available_days, DAY_FULL[d]]
-    }))
-  }
-
-  function toggleSlot(s) {
-    setForm(f => ({
-      ...f,
-      available_time_slots: f.available_time_slots.includes(s)
-        ? f.available_time_slots.filter(x => x !== s)
-        : [...f.available_time_slots, s]
     }))
   }
 
@@ -253,29 +243,12 @@ export default function DoctorProfile() {
           {editing && <p className="text-xs text-gray-400 mt-2">Click to toggle available days</p>}
         </div>
 
-        {/* Available Time Slots */}
-        <div className="mb-5">
-          <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2 text-sm">
-            🕐 Available Time Slots
-          </h3>
-          <div className="flex flex-wrap gap-2">
-            {TIME_SLOTS.map(s => {
-              const active = form.available_time_slots.includes(s)
-              return (
-                <button key={s} type="button"
-                  onClick={() => editing && toggleSlot(s)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border
-                    ${active
-                      ? 'bg-doctor-600 text-white border-doctor-600'
-                      : 'bg-white text-gray-500 border-gray-200'}
-                    ${editing ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}
-                  `}>
-                  {s}
-                </button>
-              )
-            })}
-          </div>
-          {editing && <p className="text-xs text-gray-400 mt-2">Click to toggle available time slots</p>}
+        {/* Scheduling now lives on the Availability page (time blocks + queue) */}
+        <div className="mb-5 bg-doctor-50 border border-doctor-100 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+          <p className="text-sm text-doctor-800">
+            Patients book into your <span className="font-semibold">availability blocks</span> and get a queue number — no fixed time slots.
+          </p>
+          <Link to="/doctor/availability" className="text-sm font-semibold text-doctor-700 hover:underline shrink-0">Manage →</Link>
         </div>
 
         {/* Profile Stats */}

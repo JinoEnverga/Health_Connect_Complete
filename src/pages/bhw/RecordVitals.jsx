@@ -3,6 +3,42 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { Heart, Search, CheckCircle, ChevronLeft } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
+// Defined at module level, not inside the page component: a component
+// declared inside another one is a new type on every render, so React
+// remounts the <input> on each keystroke and it loses focus.
+function VitalInput({ label, unit, placeholder, value, onChange }) {
+  return (
+    <div>
+      <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{label}</label>
+      <div className="flex items-center mt-1">
+        <input
+          type="number"
+          placeholder={placeholder || '—'}
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          className="input rounded-r-none border-r-0"
+        />
+        {unit && (
+          <span className="bg-gray-100 border border-gray-200 border-l-0 rounded-r-xl px-3 py-3 text-sm text-gray-500 whitespace-nowrap">
+            {unit}
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+const VITAL_FIELDS = [
+  { label: 'Temperature',    field: 'temperature',    unit: '°C',   placeholder: '36.5' },
+  { label: 'Oxygen Level',   field: 'oxygen_level',   unit: '%',    placeholder: '98' },
+  { label: 'Systolic BP',    field: 'systolic_bp',    unit: 'mmHg', placeholder: '120' },
+  { label: 'Diastolic BP',   field: 'diastolic_bp',   unit: 'mmHg', placeholder: '80' },
+  { label: 'Heart Rate',     field: 'heart_rate',     unit: 'bpm',  placeholder: '72' },
+  { label: 'Breathing Rate', field: 'breathing_rate', unit: '/min', placeholder: '16' },
+  { label: 'Weight',         field: 'weight',         unit: 'kg',   placeholder: '60' },
+  { label: 'Height',         field: 'height',         unit: 'cm',   placeholder: '165' },
+]
+
 export default function BHWRecordVitals() {
   const navigate = useNavigate()
   const { state } = useLocation()
@@ -11,6 +47,7 @@ export default function BHWRecordVitals() {
   const [selected, setSelected]     = useState(state?.patientId ? { id: state.patientId, name: state.patientName } : null)
   const [saving, setSaving]         = useState(false)
   const [saved, setSaved]           = useState(false)
+  const [error, setError]           = useState('')
   const [form, setForm] = useState({
     temperature: '', oxygen_level: '', systolic_bp: '', diastolic_bp: '',
     heart_rate: '', breathing_rate: '', weight: '', height: '', notes: '',
@@ -33,7 +70,7 @@ export default function BHWRecordVitals() {
 
   async function handleSave() {
     if (!selected) return
-    setSaving(true)
+    setSaving(true); setError('')
     const payload = {
       patient_id: selected.id,
       measured_at: new Date().toISOString(),
@@ -41,31 +78,12 @@ export default function BHWRecordVitals() {
     Object.entries(form).forEach(([k, v]) => {
       if (v !== '') payload[k] = k === 'notes' ? v : Number(v)
     })
-    await supabase.from('vitals').insert(payload)
+    const { error: insertErr } = await supabase.from('vitals').insert(payload)
     setSaving(false)
+    if (insertErr) { setError(`Could not save vitals: ${insertErr.message}`); return }
     setSaved(true)
     setTimeout(() => { setSaved(false); navigate('/bhw/patients') }, 1800)
   }
-
-  const VitalInput = ({ label, field, unit, placeholder }) => (
-    <div>
-      <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{label}</label>
-      <div className="flex items-center mt-1">
-        <input
-          type="number"
-          placeholder={placeholder || '—'}
-          value={form[field]}
-          onChange={e => set(field, e.target.value)}
-          className="input rounded-r-none border-r-0"
-        />
-        {unit && (
-          <span className="bg-gray-100 border border-gray-200 border-l-0 rounded-r-xl px-3 py-3 text-sm text-gray-500 whitespace-nowrap">
-            {unit}
-          </span>
-        )}
-      </div>
-    </div>
-  )
 
   return (
     <div className="space-y-5 max-w-lg">
@@ -130,14 +148,10 @@ export default function BHWRecordVitals() {
             <Heart className="w-4 h-4 text-orange-500"/> Vital Signs
           </p>
           <div className="grid grid-cols-2 gap-4">
-            <VitalInput label="Temperature"   field="temperature"    unit="°C"   placeholder="36.5"/>
-            <VitalInput label="Oxygen Level"  field="oxygen_level"   unit="%"    placeholder="98"/>
-            <VitalInput label="Systolic BP"   field="systolic_bp"    unit="mmHg" placeholder="120"/>
-            <VitalInput label="Diastolic BP"  field="diastolic_bp"   unit="mmHg" placeholder="80"/>
-            <VitalInput label="Heart Rate"    field="heart_rate"     unit="bpm"  placeholder="72"/>
-            <VitalInput label="Breathing Rate" field="breathing_rate" unit="/min" placeholder="16"/>
-            <VitalInput label="Weight"        field="weight"         unit="kg"   placeholder="60"/>
-            <VitalInput label="Height"        field="height"         unit="cm"   placeholder="165"/>
+            {VITAL_FIELDS.map(({ label, field, unit, placeholder }) => (
+              <VitalInput key={field} label={label} unit={unit} placeholder={placeholder}
+                value={form[field]} onChange={v => set(field, v)}/>
+            ))}
           </div>
           <div>
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Notes</label>
@@ -149,6 +163,10 @@ export default function BHWRecordVitals() {
               className="input mt-1 resize-none"
             />
           </div>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl">{error}</div>
+          )}
 
           {saved ? (
             <div className="flex items-center justify-center gap-2 bg-green-50 text-green-700 font-semibold py-3 rounded-xl">

@@ -17,6 +17,8 @@ export default function Announcements() {
   const [sending, setSending]   = useState(false)
   const [target, setTarget]     = useState('all')
   const [form, setForm] = useState({ title: '', body: '' })
+  const [error, setError]       = useState('')
+  const [notice, setNotice]     = useState('')
 
   useEffect(() => { load() }, [])
 
@@ -34,12 +36,12 @@ export default function Announcements() {
 
   async function send() {
     if (!form.title.trim() || !form.body.trim()) return
-    setSending(true)
+    setSending(true); setError(''); setNotice('')
 
-    const { data: usersData } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq(target === 'all' ? 'id' : 'role', target === 'all' ? undefined : target)
+    let query = supabase.from('profiles').select('id')
+    if (target !== 'all') query = query.eq('role', target)
+    const { data: usersData, error: usersErr } = await query
+    if (usersErr) { setError(`Could not load recipients: ${usersErr.message}`); setSending(false); return }
 
     const recipients = (usersData || [])
     const inserts = recipients.map(u => ({
@@ -51,10 +53,12 @@ export default function Announcements() {
       is_read: false,
     }))
 
-    if (inserts.length > 0) {
-      await supabase.from('notifications').insert(inserts)
-    }
+    if (inserts.length === 0) { setError('No users match that audience.'); setSending(false); return }
 
+    const { error: insertErr } = await supabase.from('notifications').insert(inserts)
+    if (insertErr) { setError(`Could not send announcement: ${insertErr.message}`); setSending(false); return }
+
+    setNotice(`Sent to ${inserts.length} user${inserts.length === 1 ? '' : 's'}.`)
     setForm({ title: '', body: '' })
     setSending(false)
     load()
@@ -109,6 +113,13 @@ export default function Announcements() {
             placeholder="Write your announcement here..."
             className="input mt-1 resize-none"/>
         </div>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">{error}</div>
+        )}
+        {notice && (
+          <div className="bg-green-50 border border-green-200 text-green-700 rounded-xl px-4 py-3 text-sm">{notice}</div>
+        )}
 
         <button onClick={send} disabled={sending || !form.title.trim() || !form.body.trim()}
           className="btn-primary-admin w-full disabled:opacity-50">

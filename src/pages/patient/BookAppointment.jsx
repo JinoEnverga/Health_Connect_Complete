@@ -1,8 +1,11 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { ArrowLeft, Calendar, Clock, User, CheckCircle, Star } from 'lucide-react'
+import { ArrowLeft, Calendar, Clock, User, CheckCircle, Star, Ticket, Users } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import { manilaToday, formatRange, formatDay, relativeDay, blockPhase, estimateWindow } from '../../lib/queue'
+
+const DAYS_AHEAD = 30
 
 export default function BookAppointment() {
   const navigate  = useNavigate()
@@ -12,9 +15,13 @@ export default function BookAppointment() {
 
   const [doctors, setDoctors]     = useState([])
   const [selected, setSelected]   = useState(preDoc || null)
-  const [form, setForm]           = useState({ doctor_id: preDoc?.user_id || '', date: '', time_slot: '', chief_complaint: '' })
+  const [blocks, setBlocks]       = useState([])
+  const [myBlockSpots, setMyBlockSpots] = useState({}) // block_id -> my queue_number
+  const [blocksLoading, setBlocksLoading] = useState(false)
+  const [blockId, setBlockId]     = useState(null)
+  const [complaint, setComplaint] = useState('')
   const [loading, setLoading]     = useState(false)
-  const [success, setSuccess]     = useState(false)
+  const [booked, setBooked]       = useState(null)
   const [error, setError]         = useState('')
 
   useEffect(() => {
@@ -22,41 +29,111 @@ export default function BookAppointment() {
       .then(({ data }) => setDoctors(data || []))
   }, [])
 
+  const loadBlocks = useCallback(async () => {
+    if (!selected?.user_id) { setBlocks([]); return }
+    setBlocksLoading(true)
+    const [blocksRes, mineRes] = await Promise.all([
+      supabase.from('availability_blocks')
+        .select('*')
+        .eq('doctor_id', selected.user_id)
+        .gte('date', manilaToday())
+        .lte('date', manilaToday(DAYS_AHEAD))
+        .order('date').order('start_time'),
+      supabase.from('appointments')
+        .select('block_id, queue_number')
+        .eq('patient_id', user.id)
+        .not('block_id', 'is', null)
+        .in('status', ['waiting', 'in_progress']),
+    ])
+    if (blocksRes.error) setError(`Could not load availability: ${blocksRes.error.message}`)
+    setBlocks((blocksRes.data || []).filter(b => blockPhase(b) !== 'past'))
+    setMyBlockSpots(Object.fromEntries((mineRes.data || []).map(a => [a.block_id, a.queue_number])))
+    setBlocksLoading(false)
+  }, [selected?.user_id, user.id])
+
+  useEffect(() => { loadBlocks() }, [loadBlocks])
+
+  // Spots left update live while the patient is choosing.
+  useEffect(() => {
+    if (!selected?.user_id) return
+    const channel = supabase.channel(`book-blocks-${selected.user_id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'availability_blocks', filter: `doctor_id=eq.${selected.user_id}` }, loadBlocks)
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [selected?.user_id, loadBlocks])
+
   function selectDoctor(doc) {
     setSelected(doc)
-    setForm(f => ({ ...f, doctor_id: doc.user_id, time_slot: '' }))
+    setBlockId(null)
+    setError('')
   }
+
+  const chosen = blocks.find(b => b.id === blockId) || null
+
+  const grouped = useMemo(() => {
+    const map = new Map()
+    blocks.forEach(b => { if (!map.has(b.date)) map.set(b.date, []); map.get(b.date).push(b) })
+    return [...map.entries()]
+  }, [blocks])
 
   async function handleSubmit(e) {
     e.preventDefault()
-    if (!form.doctor_id || !form.date || !form.time_slot) { setError('Please fill all required fields'); return }
+    if (!chosen) { setError('Please choose an availability block.'); return }
     setLoading(true); setError('')
-    const { error: err } = await supabase.from('appointments').insert({
-      patient_id: user.id,
-      doctor_id:  form.doctor_id,
-      appointment_date: form.date,
-      time_slot:  form.time_slot,
-      chief_complaint: form.chief_complaint,
-      consultation_fee: selected?.consultation_fee,
-    })
-    if (err) { setError(err.message); setLoading(false); return }
-    setSuccess(true); setLoading(false)
+
+    // The database assigns the queue number, estimated time, doctor and
+    // date, and enforces capacity atomically — we only say which block.
+    const { data: inserted, error: err } = await supabase
+      .from('appointments')
+      .insert({ patient_id: user.id, block_id: chosen.id, chief_complaint: complaint || null })
+      .select('id')
+      .single()
+
+    if (err) {
+      setError(err.message)
+      setLoading(false)
+      loadBlocks() // e.g. it just filled up — show the real counts
+      return
+    }
+
+    const { data: appt } = await supabase
+      .from('appointments')
+      .select('id, queue_number, estimated_time, appointment_date')
+      .eq('id', inserted.id)
+      .single()
+    setBooked({ ...appt, block: chosen })
+    setLoading(false)
   }
 
-  if (success) return (
+  if (booked) return (
     <div className="max-w-lg mx-auto">
-      <div className="card flex flex-col items-center text-center py-12">
+      <div className="card flex flex-col items-center text-center py-10">
         <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
           <CheckCircle className="w-8 h-8 text-green-600"/>
         </div>
-        <h2 className="text-xl font-bold text-gray-900 mb-2">Appointment Booked!</h2>
-        <p className="text-gray-500 text-sm mb-6">Your appointment has been confirmed. You'll receive a notification with the details.</p>
-        <div className="bg-gray-50 rounded-xl p-4 w-full text-left mb-6">
-          <p className="text-sm text-gray-600"><span className="font-semibold">Doctor:</span> Dr. {selected?.full_name}</p>
-          <p className="text-sm text-gray-600 mt-1"><span className="font-semibold">Date:</span> {form.date}</p>
-          <p className="text-sm text-gray-600 mt-1"><span className="font-semibold">Time:</span> {form.time_slot}</p>
+        <h2 className="text-xl font-bold text-gray-900 mb-1">You're in the queue!</h2>
+        <p className="text-gray-500 text-sm mb-6">Your estimated time updates live as the doctor sees each patient.</p>
+        <div className="grid grid-cols-2 gap-3 w-full mb-4">
+          <div className="bg-patient-50 rounded-xl py-4">
+            <p className="text-xs text-gray-500 uppercase tracking-wide">Queue number</p>
+            <p className="text-4xl font-bold text-patient-600">#{booked.queue_number}</p>
+          </div>
+          <div className="bg-gray-50 rounded-xl py-4 px-2">
+            <p className="text-xs text-gray-500 uppercase tracking-wide">Estimated</p>
+            <p className="text-base font-bold text-gray-800 mt-2">
+              {estimateWindow(booked.estimated_time, booked.block.avg_minutes_per_patient)}
+            </p>
+          </div>
         </div>
-        <button onClick={() => navigate('/appointments')} className="btn-primary-patient px-8">View My Appointments</button>
+        <div className="bg-gray-50 rounded-xl p-4 w-full text-left mb-6 text-sm text-gray-600 space-y-1">
+          <p><span className="font-semibold">Doctor:</span> Dr. {selected?.full_name}</p>
+          <p><span className="font-semibold">Date:</span> {formatDay(booked.appointment_date, { year: 'numeric' })}</p>
+          <p><span className="font-semibold">Clinic hours:</span> {formatRange(booked.block.start_time, booked.block.end_time)}</p>
+        </div>
+        <div className="flex gap-3 w-full">
+          <button onClick={() => navigate('/dashboard')} className="btn-primary-patient flex-1">Track My Queue</button>
+          <button onClick={() => navigate('/appointments')} className="btn-outline flex-1">My Appointments</button>
+        </div>
       </div>
     </div>
   )
@@ -71,7 +148,7 @@ export default function BookAppointment() {
         </button>
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Book Appointment</h1>
-          <p className="text-gray-500 text-sm">Schedule a teleconsultation with your doctor</p>
+          <p className="text-gray-500 text-sm">Join a doctor's queue for an available time block</p>
         </div>
       </div>
 
@@ -83,22 +160,19 @@ export default function BookAppointment() {
           <h2 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
             <User className="w-4 h-4 text-patient-600"/> Select Doctor
           </h2>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Doctor</label>
-            <select value={form.doctor_id}
-              onChange={e => {
-                const doc = doctors.find(d => d.user_id === e.target.value)
-                if (doc) selectDoctor(doc)
-              }}
-              className="input">
-              <option value="">— Select a doctor —</option>
-              {doctors.map(d => (
-                <option key={d.user_id} value={d.user_id}>
-                  Dr. {d.full_name} — {d.specialization}
-                </option>
-              ))}
-            </select>
-          </div>
+          <select value={selected?.user_id || ''}
+            onChange={e => {
+              const doc = doctors.find(d => d.user_id === e.target.value)
+              if (doc) selectDoctor(doc)
+            }}
+            className="input">
+            <option value="">— Select a doctor —</option>
+            {doctors.map(d => (
+              <option key={d.user_id} value={d.user_id}>
+                Dr. {d.full_name} — {d.specialization}
+              </option>
+            ))}
+          </select>
 
           {selected && (
             <div className="mt-3 bg-patient-50 rounded-xl p-4 flex items-center gap-3">
@@ -106,47 +180,79 @@ export default function BookAppointment() {
                 {initials}
               </div>
               <div>
-                <div className="flex items-center gap-1.5">
-                  <p className="font-semibold text-gray-900 text-sm">Dr. {selected.full_name}</p>
-                  <CheckCircle className="w-3.5 h-3.5 text-patient-600"/>
-                </div>
+                <p className="font-semibold text-gray-900 text-sm">Dr. {selected.full_name}</p>
                 <p className="text-patient-600 text-xs font-medium">{selected.specialization}</p>
                 <p className="text-gray-500 text-xs flex items-center gap-2 mt-0.5">
                   <Star className="w-3 h-3 text-yellow-400 fill-yellow-400"/>
-                  {selected.average_rating?.toFixed(1) || 'N/A'} · ₱{selected.consultation_fee} per session
+                  {selected.average_rating != null ? Number(selected.average_rating).toFixed(1) : 'N/A'} · ₱{selected.consultation_fee} per session
                 </p>
               </div>
             </div>
           )}
         </div>
 
-        {/* Date & Time */}
-        <div className="card">
-          <h2 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-patient-600"/> Select Date & Time
-          </h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Date</label>
-              <input type="date" required min={new Date().toISOString().split('T')[0]}
-                value={form.date} onChange={e => setForm({...form, date: e.target.value})}
-                className="input"/>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Time Slot</label>
-              <select required value={form.time_slot}
-                onChange={e => setForm({...form, time_slot: e.target.value})}
-                className="input">
-                <option value="">— Select time —</option>
-                {selected?.available_time_slots?.map(t => (
-                  <option key={t} value={t}>{t}</option>
-                )) || ['09:00 AM','09:30 AM','10:00 AM','10:30 AM','11:00 AM','01:00 PM','01:30 PM','02:00 PM','03:00 PM','04:00 PM'].map(t => (
-                  <option key={t} value={t}>{t}</option>
+        {/* Availability blocks */}
+        {selected && (
+          <div className="card">
+            <h2 className="font-bold text-gray-900 mb-1 flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-patient-600"/> Choose a Time Block
+            </h2>
+            <p className="text-xs text-gray-500 mb-4">
+              You'll get a queue number and an estimated time within the block — no fixed slot to hit.
+            </p>
+
+            {blocksLoading && blocks.length === 0 ? (
+              <div className="space-y-2">{[1, 2].map(i => <div key={i} className="h-16 bg-gray-50 rounded-xl animate-pulse"/>)}</div>
+            ) : grouped.length === 0 ? (
+              <div className="text-center py-8">
+                <Clock className="w-10 h-10 text-gray-300 mx-auto mb-2"/>
+                <p className="font-semibold text-gray-500">No open availability in the next {DAYS_AHEAD} days</p>
+                <p className="text-sm text-gray-400">Try another doctor or check back later.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {grouped.map(([date, dayBlocks]) => (
+                  <div key={date}>
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
+                      {relativeDay(date)}{relativeDay(date) !== formatDay(date) ? ` · ${formatDay(date)}` : ''}
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {dayBlocks.map(b => {
+                        const left = b.max_patients - b.booked_count
+                        const mine = myBlockSpots[b.id]
+                        const disabled = b.is_full || !!mine
+                        const active = blockId === b.id
+                        return (
+                          <button key={b.id} type="button" disabled={disabled}
+                            onClick={() => setBlockId(b.id)}
+                            className={`text-left rounded-xl border-2 p-3 transition-all ${
+                              active ? 'border-patient-500 bg-patient-50'
+                              : disabled ? 'border-gray-100 bg-gray-50 opacity-60 cursor-not-allowed'
+                              : 'border-gray-100 hover:border-patient-300 bg-white'
+                            }`}>
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="font-semibold text-gray-900 text-sm">{formatRange(b.start_time, b.end_time)}</p>
+                              {blockPhase(b) === 'live' && <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-full">LIVE</span>}
+                            </div>
+                            <p className={`text-xs mt-1 flex items-center gap-1 font-medium ${
+                              mine ? 'text-patient-600' : b.is_full ? 'text-red-600' : left <= 2 ? 'text-orange-600' : 'text-green-700'
+                            }`}>
+                              <Users className="w-3 h-3"/>
+                              {mine ? `You're #${mine} in this queue`
+                                : b.is_full ? 'Full'
+                                : `${left} of ${b.max_patients} spots left`}
+                            </p>
+                            <p className="text-[11px] text-gray-400 mt-0.5">~{b.avg_minutes_per_patient} min per patient</p>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
                 ))}
-              </select>
-            </div>
+              </div>
+            )}
           </div>
-        </div>
+        )}
 
         {/* Notes */}
         <div className="card">
@@ -156,15 +262,15 @@ export default function BookAppointment() {
           </label>
           <textarea rows={3} maxLength={500}
             placeholder="e.g., Persistent headache for the past 3 days, mild fever..."
-            value={form.chief_complaint} onChange={e => setForm({...form, chief_complaint: e.target.value})}
+            value={complaint} onChange={e => setComplaint(e.target.value)}
             className="input resize-none text-sm"/>
-          <p className="text-xs text-gray-400 mt-1 text-right">{form.chief_complaint.length}/500 characters</p>
+          <p className="text-xs text-gray-400 mt-1 text-right">{complaint.length}/500 characters</p>
         </div>
 
-        <button type="submit" disabled={loading} className="btn-primary-patient w-full py-4 text-base">
+        <button type="submit" disabled={loading || !chosen} className="btn-primary-patient w-full py-4 text-base disabled:opacity-50">
           {loading
             ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"/>
-            : <><CheckCircle className="w-5 h-5"/> Confirm Appointment</>}
+            : <><Ticket className="w-5 h-5"/> {chosen ? `Join Queue · ${relativeDay(chosen.date)} ${formatRange(chosen.start_time, chosen.end_time)}` : 'Choose a time block'}</>}
         </button>
       </form>
     </div>

@@ -24,16 +24,30 @@ export default function PatientProfile() {
   const [error,   setError]   = useState('')
   const [success, setSuccess] = useState(false)
   const [pProfile, setPProfile] = useState(null)
+  // Height/weight have no column in patient_profiles — they're recorded per
+  // measurement in `vitals`, so show the most recent non-empty values.
+  const [bodyStats, setBodyStats] = useState({ height: null, weight: null })
 
   // Form state
   const [form, setForm] = useState({
     first_name: '', last_name: '', phone: '', date_of_birth: '', gender: '',
     address: '', emergency_contact_name: '', emergency_contact_phone: '',
-    blood_type: '', medical_history: '', height: '', weight: '',
+    blood_type: '', medical_history: '',
     allergies: [], current_medications: [], birth_year: '',
   })
 
-  useEffect(() => { if (user) fetchPatientProfile() }, [user])
+  useEffect(() => { if (user) { fetchPatientProfile(); fetchBodyStats() } }, [user])
+
+  async function fetchBodyStats() {
+    const { data } = await supabase
+      .from('vitals').select('height, weight').eq('patient_id', user.id)
+      .order('measured_at', { ascending: false }).limit(20)
+    const rows = data || []
+    setBodyStats({
+      height: rows.find(v => v.height != null)?.height ?? null,
+      weight: rows.find(v => v.weight != null)?.weight ?? null,
+    })
+  }
 
   async function fetchPatientProfile() {
     const { data } = await supabase
@@ -156,14 +170,12 @@ export default function PatientProfile() {
               ].map(({ label, field, unit, icon }) => (
                 <div key={field}>
                   <p className="text-xs text-gray-500 mb-1">{icon} {label}</p>
-                  {editing
-                    ? <input type="number" step="0.1" placeholder={`${label} in ${unit}`}
-                        value={form[field]} onChange={e => setForm(f => ({...f, [field]: e.target.value}))}
-                        className="input text-sm py-2"/>
-                    : <p className="font-semibold text-gray-800">{form[field] ? `${form[field]} ${unit}` : '—'}</p>
-                  }
+                  <p className="font-semibold text-gray-800">{bodyStats[field] ? `${bodyStats[field]} ${unit}` : '—'}</p>
                 </div>
               ))}
+              {editing && (
+                <p className="text-xs text-gray-400">Height and weight come from your latest vitals — update them on the My Vitals page.</p>
+              )}
               <div>
                 <p className="text-xs text-gray-500 mb-1"><Droplets className="w-3 h-3 inline mr-1 text-red-500"/>Blood Type</p>
                 {editing

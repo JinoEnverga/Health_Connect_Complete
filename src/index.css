@@ -59,3 +59,32 @@ body { @apply bg-gray-50 text-gray-900; }
   @apply w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none
          focus:ring-2 focus:ring-bhw-500 focus:border-transparent transition-all;
 }
+
+/* Printing a digital prescription: only the document marked as the print
+   target (see DigitalPrescription.jsx) appears on paper / in the PDF. */
+/* Prescription printing: DigitalPrescription renders a print copy (with
+   watermark, security strip and pharmacist ledger) into .rx-print-root,
+   directly under <body>. Only that container is printed. */
+.rx-print-root { display: none; }
+.rx-watermark {
+  position: absolute; inset: 0; pointer-events: none; z-index: 0;
+  display: flex; flex-direction: column; justify-content: space-around; align-items: center;
+  transform: rotate(-28deg) scale(1.4);
+  font-size: 22px; font-weight: 800; letter-spacing: 0.08em; white-space: nowrap;
+  color: rgba(17, 24, 39, 0.07);
+}
+.rx-ledger table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.rx-ledger th, .rx-ledger td { border: 1px solid #1f2937; padding: 4px 6px; text-align: left; vertical-align: top; }
+.rx-ledger td { height: 34px; }
+
+@media print {
+  body:has(> .rx-print-root) > *:not(.rx-print-root) { display: none !important; }
+  .rx-print-root {
+    display: block !important;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .rx-ledger { break-inside: avoid; }
+  /* The on-screen copy never prints (Ctrl+P) — only the counted print copy. */
+  .rx-document { display: none !important; }
+  .no-print { display: none !important; }
+}

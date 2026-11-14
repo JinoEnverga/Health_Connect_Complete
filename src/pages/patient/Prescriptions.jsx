@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { FileText, Lock, ChevronDown, ChevronUp, Info, Download } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import DigitalPrescription from '../../components/shared/DigitalPrescription'
 
 const STATUS_COLORS = {
   active:    'badge-active',
@@ -19,7 +20,7 @@ const MAX_ATTEMPTS = 5
 const COOLDOWN_MS  = 30_000
 const SIGNED_URL_SECONDS = 120
 
-function RxCard({ rx }) {
+function RxCard({ rx, patient, onPrinted }) {
   const [expanded, setExpanded] = useState(false)
   const [unlocked, setUnlocked] = useState(false)
   const [details,  setDetails]  = useState(null) // { additional_notes, file_path, file_name, file_type, medications, downloadUrl }
@@ -78,6 +79,16 @@ function RxCard({ rx }) {
     if (digits.length === 4 && !locked && !checking) checkCode(digits)
   }
 
+  // Counts the print on the server first (one-time print lock, see
+  // 014_prescription_print_lock.sql); throws the server's reason if refused.
+  async function officialPrint() {
+    const { data, error: rpcError } = await supabase
+      .rpc('record_prescription_print', { p_prescription_id: rx.id })
+    if (rpcError) throw new Error(rpcError.message)
+    onPrinted(rx.id, { print_count: data.copy_number, max_prints: data.max_prints, last_printed_at: data.printed_at })
+    return data
+  }
+
   const isImage = details?.file_type?.startsWith('image/')
 
   return (
@@ -91,6 +102,7 @@ function RxCard({ rx }) {
           <div>
             <p className="font-bold text-gray-900">{rx.diagnosis}</p>
             <p className="text-xs text-gray-500 mt-0.5">
+              {rx.doctor ? `Dr. ${rx.doctor.first_name || ''} ${rx.doctor.last_name || ''}`.trim() + ' · ' : ''}
               Issued {new Date(rx.issued_at).toLocaleDateString('en-PH', { year:'numeric', month:'short', day:'numeric' })}
             </p>
           </div>
@@ -151,7 +163,7 @@ function RxCard({ rx }) {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-gray-900 text-sm truncate">{details.file_name || 'Prescription file'}</p>
-                    <p className="text-xs text-gray-500">Download and bring this to any pharmacy</p>
+                    <p className="text-xs text-gray-500">Uploaded prescription (issued before digital prescriptions)</p>
                   </div>
                   {details.downloadUrl
                     ? <a href={details.downloadUrl} download={details.file_name} target="_blank" rel="noreferrer"
@@ -169,31 +181,19 @@ function RxCard({ rx }) {
                 </div>
               )}
 
-              {/* Legacy prescriptions issued before file upload still show their itemized medications */}
+              {/* Structured digital prescription (all new prescriptions). Older
+                  ones that were only an uploaded file show the file above. */}
               {details.medications?.length > 0 && (
-                <div className="space-y-2">
-                  {details.medications.map((m, i) => (
-                    <div key={i} className="bg-gray-50 rounded-xl p-3">
-                      <div className="flex items-center justify-between mb-1">
-                        <p className="font-bold text-gray-900 text-sm">{m.medicine_name}</p>
-                        <span className="text-xs bg-white border border-gray-200 text-gray-600 px-2 py-0.5 rounded-full">{m.dosage}</span>
-                      </div>
-                      <div className="flex gap-3 text-xs text-gray-500">
-                        <span>🕐 {m.frequency}</span>
-                        <span>📅 {m.duration}</span>
-                        {m.quantity && <span>📦 Qty: {m.quantity}</span>}
-                      </div>
-                      {m.special_instructions && (
-                        <p className="text-xs text-orange-600 mt-1.5 bg-orange-50 rounded-lg px-2 py-1">
-                          ⚠️ {m.special_instructions}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                <DigitalPrescription
+                  mode="patient"
+                  rx={{ ...details, ...rx }}
+                  medications={details.medications}
+                  doctor={doctorLetterhead(rx.doctor)}
+                  patient={patient}
+                  onOfficialPrint={officialPrint}/>
               )}
 
-              {details.additional_notes && (
+              {details.file_path && details.additional_notes && !(details.medications?.length > 0) && (
                 <div className="bg-yellow-50 rounded-xl p-3 text-xs text-yellow-800">
                   <p className="font-semibold mb-0.5">Doctor's Notes:</p>
                   <p>{details.additional_notes}</p>
@@ -201,7 +201,7 @@ function RxCard({ rx }) {
               )}
 
               {!details.file_path && !(details.medications?.length > 0) && (
-                <p className="text-gray-400 text-sm">No file or medications on record for this prescription.</p>
+                <p className="text-gray-400 text-sm">No medications on record for this prescription.</p>
               )}
             </div>
           )}
@@ -211,16 +211,40 @@ function RxCard({ rx }) {
   )
 }
 
+// doctor_profiles is embedded through profiles; PostgREST returns it as an
+// object (one-to-one) — accept an array too, to be safe.
+function doctorLetterhead(doc) {
+  if (!doc) return {}
+  const dp = Array.isArray(doc.doctor_profiles) ? doc.doctor_profiles[0] : doc.doctor_profiles
+  return { first_name: doc.first_name, last_name: doc.last_name, ...(dp || {}) }
+}
+
 export default function Prescriptions() {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const [rxList,  setRxList]  = useState([])
   const [loading, setLoading] = useState(true)
+
+  // Print counters change through the print lock; follow them live so the
+  // button state is the same in every open tab and device.
+  useEffect(() => {
+    if (!user) return
+    const channel = supabase.channel(`rx-prints-${user.id}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'prescriptions', filter: `patient_id=eq.${user.id}` },
+        ({ new: row }) => setRxList(list => list.map(r => r.id === row.id ? { ...r, ...row, doctor: r.doctor } : r)))
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [user])
+
+  function patchRx(id, fields) {
+    setRxList(list => list.map(r => r.id === id ? { ...r, ...fields } : r))
+  }
 
   useEffect(() => {
     if (!user) return
     supabase
       .from('prescriptions')
-      .select('*')
+      .select(`*, doctor:profiles!prescriptions_doctor_id_fkey(first_name, last_name,
+        doctor_profiles(specialization, license_number, clinic_name, clinic_address, clinic_phone))`)
       .eq('patient_id', user.id)
       .order('issued_at', { ascending: false })
       .then(({ data }) => { setRxList(data || []); setLoading(false) })
@@ -237,8 +261,10 @@ export default function Prescriptions() {
       <div className="bg-patient-50 border border-patient-100 rounded-2xl p-4 flex items-start gap-3">
         <Info className="w-5 h-5 text-patient-600 shrink-0 mt-0.5"/>
         <p className="text-sm text-patient-800">
-          <strong>How to use:</strong> Tap "View Prescription" and enter your birth year to unlock it, then
-          download the file and bring it to any pharmacy.
+          <strong>How to use:</strong> Tap "View Prescription" and enter your birth year to unlock it.
+          Then use <strong>Print Official Copy</strong> and bring the printed sheet to the pharmacy. Official copies are
+          limited (1 + refills), so print only when your printer is ready. If you buy only part of your medicine,
+          the pharmacist records it on the sheet — keep it for your next purchase.
         </p>
       </div>
 
@@ -254,7 +280,7 @@ export default function Prescriptions() {
         </div>
       ) : (
         <div className="space-y-4">
-          {rxList.map(rx => <RxCard key={rx.id} rx={rx}/>)}
+          {rxList.map(rx => <RxCard key={rx.id} rx={rx} patient={profile || {}} onPrinted={patchRx}/>)}
         </div>
       )}
     </div>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import {
-  LayoutDashboard, Users, Heart, QrCode,
+  LayoutDashboard, Users, Heart,
   History, UserPlus, LogOut, Bell, Menu, Shield
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
@@ -11,7 +11,6 @@ const nav = [
   { to: '/bhw/dashboard',         icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/bhw/patients',          icon: Users,           label: 'My Patients' },
   { to: '/bhw/record-vitals',     icon: Heart,           label: 'Record Vitals' },
-  { to: '/bhw/scan-prescription', icon: QrCode,          label: 'Scan Prescription' },
   { to: '/bhw/medical-history',   icon: History,         label: 'Medical History' },
   { to: '/bhw/register-patient',  icon: UserPlus,        label: 'Register Patient' },
 ]

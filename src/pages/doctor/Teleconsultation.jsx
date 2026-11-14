@@ -4,6 +4,8 @@ import { Video, Calendar } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import CallRoom from '../../components/shared/CallRoom'
+import CallHistory from '../../components/shared/CallHistory'
+import { ACTIVE_STATUSES } from '../../lib/queue'
 
 export default function DoctorTeleconsultation() {
   const { user } = useAuth()
@@ -27,7 +29,7 @@ export default function DoctorTeleconsultation() {
       .from('appointments')
       .select(`*, patient:profiles!appointments_patient_id_fkey(first_name, last_name)`)
       .eq('doctor_id', user.id)
-      .eq('status', 'upcoming')
+      .in('status', ACTIVE_STATUSES)
       .order('appointment_date', { ascending: true })
     setUpcoming(upcomingData || [])
 
@@ -91,6 +93,8 @@ export default function DoctorTeleconsultation() {
           ))}
         </div>
       )}
+
+      <CallHistory role="doctor" userId={user.id}/>
     </div>
   )
 

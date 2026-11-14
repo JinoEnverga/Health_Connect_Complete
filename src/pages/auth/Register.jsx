@@ -32,6 +32,7 @@ function validateBirthYear(value) {
 export default function Register() {
   const [params] = useSearchParams()
   const { signUp } = useAuth()
+  const navigate   = useNavigate()
   const defaultRole = ROLES.find(r => r.value === params.get('role'))?.value ?? 'patient'
 
   const [form, setForm] = useState({
@@ -52,12 +53,16 @@ export default function Register() {
     }
     setLoading(true); setError('')
     try {
-      await signUp(form.email, form.password, form.role, {
+      const data = await signUp(form.email, form.password, form.role, {
         first_name: form.firstName,
         last_name:  form.lastName,
         ...(form.role === 'patient' ? { birth_year: parseInt(form.birthYear, 10) } : {}),
       })
-      setSuccess(true)
+      // With email confirmation off, Supabase signs the user in right away —
+      // go straight to their portal instead of a misleading "check your
+      // email" screen. With it on there's no session yet, so show that.
+      if (data?.session) navigate('/')
+      else setSuccess(true)
     } catch (err) {
       setError(err.message)
     } finally {

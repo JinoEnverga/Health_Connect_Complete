@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { Calendar, FileText, Users, CheckCircle, Clock, RefreshCw, Video } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import LiveQueue from '../../components/doctor/LiveQueue'
+import { isActive, statusMeta, relativeDay } from '../../lib/queue'
 
 function StatCard({ icon: Icon, value, label, sub, color, bg }) {
   return (
@@ -44,12 +46,12 @@ export default function DoctorDashboard() {
     const allAppts = appts.data || []
     const allRx    = rxData.data || []
     setStats({
-      upcoming:  allAppts.filter(a => a.status === 'upcoming').length,
+      upcoming:  allAppts.filter(a => isActive(a.status)).length,
       rxIssued:  allRx.length,
       activeRx:  allRx.filter(r => r.status === 'active').length,
       dispensed: allRx.filter(r => r.status === 'dispensed').length,
     })
-    setAppts(allAppts.filter(a => a.status === 'upcoming').slice(0, 5))
+    setAppts(allAppts.filter(a => isActive(a.status)).slice(0, 5))
     setDocProf(dpData.data)
     setLoading(false)
   }
@@ -79,6 +81,9 @@ export default function DoctorDashboard() {
           </button>
         </div>
       </div>
+
+      {/* Live queue for today's availability block */}
+      {user && <LiveQueue doctorId={user.id}/>}
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -118,11 +123,11 @@ export default function DoctorDashboard() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-gray-900 text-sm">{patName}</p>
-                    <p className="text-gray-500 text-xs">{a.appointment_date} · {a.time_slot}</p>
+                    <p className="text-gray-500 text-xs">{relativeDay(a.appointment_date)} · {a.time_slot}{a.queue_number ? ` · Queue #${a.queue_number}` : ''}</p>
                     {a.chief_complaint && <p className="text-gray-400 text-xs truncate mt-0.5">{a.chief_complaint}</p>}
                   </div>
                   <div className="flex flex-col items-end gap-1.5 shrink-0">
-                    <span className="badge-active">Upcoming</span>
+                    <span className={`text-xs font-semibold px-2 py-1 rounded-full ${statusMeta(a.status).cls}`}>{statusMeta(a.status).label}</span>
                     <button onClick={() => navigate('/doctor/teleconsultation', { state: { appointment: a } })}
                       className="flex items-center gap-1 text-xs text-doctor-600 font-semibold hover:underline">
                       <Video className="w-3 h-3"/> Start Call

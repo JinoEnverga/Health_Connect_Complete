@@ -1,17 +1,19 @@
 import React, { useState, useEffect } from 'react'
-import { Calendar, RefreshCw, Search, CheckCircle, XCircle, Clock, FileText, ChevronDown, Video } from 'lucide-react'
+import { Calendar, RefreshCw, Search, CheckCircle, XCircle, FileText, ChevronDown, Video, PlayCircle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
+import { isActive, statusMeta, formatDay, formatTimestamp } from '../../lib/queue'
 
 const TABS = ['All', 'Upcoming', 'Completed', 'Cancelled']
 
-const STATUS_STYLE = {
-  upcoming:  { cls: 'bg-green-100 text-green-700',  icon: Clock,        label: 'Upcoming'  },
-  completed: { cls: 'bg-blue-100 text-blue-700',    icon: CheckCircle,  label: 'Completed' },
-  cancelled: { cls: 'bg-red-100 text-red-700',      icon: XCircle,      label: 'Cancelled' },
-  no_show:   { cls: 'bg-gray-100 text-gray-600',    icon: XCircle,      label: 'No Show'   },
-}
+// 'Upcoming' covers legacy slot bookings and live queue spots alike;
+// 'Cancelled' also lists no-shows.
+const inTab = (a, tab) =>
+  tab === 'All' ? true
+  : tab === 'Upcoming' ? isActive(a.status)
+  : tab === 'Completed' ? a.status === 'completed'
+  : ['cancelled', 'no_show'].includes(a.status)
 
 export default function DoctorAppointments() {
   const { user } = useAuth()
@@ -23,6 +25,7 @@ export default function DoctorAppointments() {
   const [updating, setUpdating] = useState(null)
   const [expanded, setExpanded] = useState(null)
   const [notes, setNotes]      = useState({})
+  const [actionError, setActionError] = useState('')
 
   useEffect(() => { if (user) load() }, [user])
 
@@ -38,22 +41,24 @@ export default function DoctorAppointments() {
   }
 
   async function updateStatus(id, status) {
-    setUpdating(id)
-    await supabase.from('appointments').update({ status }).eq('id', id)
-    setAppts(prev => prev.map(a => a.id === id ? { ...a, status } : a))
+    setUpdating(id); setActionError('')
+    const { error } = await supabase.from('appointments').update({ status }).eq('id', id)
+    if (error) setActionError(`Could not update the appointment: ${error.message}`)
+    else setAppts(prev => prev.map(a => a.id === id ? { ...a, status } : a))
     setUpdating(null)
   }
 
   async function saveNotes(id) {
-    setUpdating(id)
-    await supabase.from('appointments').update({ doctor_notes: notes[id] }).eq('id', id)
-    setAppts(prev => prev.map(a => a.id === id ? { ...a, doctor_notes: notes[id] } : a))
+    setUpdating(id); setActionError('')
+    const { error } = await supabase.from('appointments').update({ doctor_notes: notes[id] }).eq('id', id)
+    if (error) setActionError(`Could not save notes: ${error.message}`)
+    else setAppts(prev => prev.map(a => a.id === id ? { ...a, doctor_notes: notes[id] } : a))
     setUpdating(null)
   }
 
   // Filter
   const filtered = appts
-    .filter(a => tab === 'All' || a.status === tab.toLowerCase())
+    .filter(a => inTab(a, tab))
     .filter(a => {
       if (!search) return true
       const q = search.toLowerCase()
@@ -65,10 +70,7 @@ export default function DoctorAppointments() {
       )
     })
 
-  const counts = TABS.reduce((acc, t) => ({
-    ...acc,
-    [t]: t === 'All' ? appts.length : appts.filter(a => a.status === t.toLowerCase()).length
-  }), {})
+  const counts = Object.fromEntries(TABS.map(t => [t, appts.filter(a => inTab(a, t)).length]))
 
   function patName(a)     { return a.patient ? `${a.patient.first_name} ${a.patient.last_name}` : 'Patient' }
   function patInitials(a) { return [a.patient?.first_name?.[0], a.patient?.last_name?.[0]].filter(Boolean).join('').toUpperCase() || 'P' }
@@ -85,6 +87,10 @@ export default function DoctorAppointments() {
           <RefreshCw className="w-4 h-4"/> Refresh
         </button>
       </div>
+
+      {actionError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">{actionError}</div>
+      )}
 
       {/* Search */}
       <div className="relative">
@@ -119,8 +125,7 @@ export default function DoctorAppointments() {
       ) : (
         <div className="space-y-3">
           {filtered.map(a => {
-            const s = STATUS_STYLE[a.status] || STATUS_STYLE.upcoming
-            const Icon = s.icon
+            const s = statusMeta(a.status)
             const isExpanded = expanded === a.id
 
             return (
@@ -135,7 +140,11 @@ export default function DoctorAppointments() {
                   {/* Info */}
                   <div className="flex-1 min-w-0">
                     <p className="font-bold text-gray-900 text-sm">{patName(a)}</p>
-                    <p className="text-gray-500 text-xs mt-0.5">{a.appointment_date} · {a.time_slot}</p>
+                    <p className="text-gray-500 text-xs mt-0.5">
+                      {formatDay(a.appointment_date, { year: 'numeric' })} · {a.time_slot}
+                      {a.queue_number ? ` · Queue #${a.queue_number}` : ''}
+                      {a.status === 'waiting' && a.estimated_time ? ` · est. ${formatTimestamp(a.estimated_time)}` : ''}
+                    </p>
                     {a.chief_complaint && (
                       <p className="text-gray-400 text-xs mt-0.5 truncate">{a.chief_complaint}</p>
                     )}
@@ -175,6 +184,34 @@ export default function DoctorAppointments() {
 
                     {/* Action buttons */}
                     <div className="flex flex-wrap gap-2">
+                      {/* Queue appointments are run from the Dashboard's live queue
+                          (Call Next / Complete); here they can be cancelled or
+                          marked no-show. The database enforces the allowed
+                          status changes either way. */}
+                      {a.block_id && isActive(a.status) && (
+                        <>
+                          <button onClick={() => navigate('/doctor/dashboard')}
+                            className="flex items-center gap-1.5 bg-doctor-600 hover:bg-doctor-700 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-all">
+                            <PlayCircle className="w-3.5 h-3.5"/> Open Live Queue
+                          </button>
+                          {a.status === 'in_progress' && (
+                            <button onClick={() => updateStatus(a.id, 'completed')} disabled={!!updating}
+                              className="flex items-center gap-1.5 bg-doctor-600 hover:bg-doctor-700 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-all">
+                              <CheckCircle className="w-3.5 h-3.5"/> Complete Consultation
+                            </button>
+                          )}
+                          {a.status === 'waiting' && (
+                            <button onClick={() => updateStatus(a.id, 'cancelled')} disabled={!!updating}
+                              className="flex items-center gap-1.5 bg-red-500 hover:bg-red-600 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-all">
+                              <XCircle className="w-3.5 h-3.5"/> Cancel
+                            </button>
+                          )}
+                          <button onClick={() => updateStatus(a.id, 'no_show')} disabled={!!updating}
+                            className="flex items-center gap-1.5 bg-gray-400 hover:bg-gray-500 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-all">
+                            No Show
+                          </button>
+                        </>
+                      )}
                       {a.status === 'upcoming' && (
                         <>
                           <button onClick={() => navigate('/doctor/teleconsultation', { state: { appointment: a } })}
@@ -202,7 +239,7 @@ export default function DoctorAppointments() {
                           Save Notes
                         </button>
                       )}
-                      <button onClick={() => navigate('/doctor/prescribe', { state: { patientEmail: a.patient?.email, appointmentId: a.id } })}
+                      <button onClick={() => navigate('/doctor/prescribe', { state: { patientId: a.patient_id, patientEmail: a.patient?.email, appointmentId: a.id } })}
                         className="flex items-center gap-1.5 border border-gray-300 text-gray-600 hover:bg-gray-100 text-xs font-semibold px-4 py-2 rounded-xl transition-all ml-auto">
                         <FileText className="w-3.5 h-3.5"/> Issue Rx
                       </button>
