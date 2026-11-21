@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Video, VideoOff, Mic, MicOff, PhoneOff, MessageSquare, Send, AlertTriangle, ArrowLeft, RotateCw, CheckCheck, Check } from 'lucide-react'
-import useWebRTCCall from '../../hooks/useWebRTCCall'
+import useAgoraCall from '../../hooks/useAgoraCall'
+import { agoraChannelFor } from '../../lib/agora'
 import useConsultationChat from '../../hooks/useConsultationChat'
 import { supabase } from '../../lib/supabase'
 import { logCallEvent, logCallLeaveOnUnload } from '../../lib/callLog'
 
 const STATUS_LABEL = {
-  waiting:      'Setting up your camera...',
-  connecting:   'Connecting...',
+  waiting:      'Waiting for the other person...',
   connected:    'Connected',
   reconnecting: 'Reconnecting...',
   ended:        'Call ended',
@@ -23,12 +23,23 @@ const CHAT_STATUS = {
 
 const fmtTime = ts => new Date(ts).toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit' })
 
-// Two-person WebRTC video call + persistent chat, shared by the doctor and
-// patient Teleconsultation pages. `isDoctor` picks the theme color and
-// which side of `appointment` is "the other participant" — it also decides
-// who initiates the WebRTC offer (always the doctor, to avoid both sides
-// offering at once).
-//   * Video/audio: src/hooks/useWebRTCCall.js
+// Plays an Agora video track (local or remote) into a div. Agora renders its
+// own <video> element inside the container.
+function AgoraVideo({ track, className }) {
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!track || !ref.current) return
+    track.play(ref.current, { fit: 'cover' })
+    return () => { try { track.stop() } catch { /* already closed */ } }
+  }, [track])
+  return <div ref={ref} className={className}/>
+}
+
+// Two-person video call (Agora — same channel as the mobile app) + persistent
+// chat, shared by the doctor and patient Teleconsultation pages. `isDoctor`
+// picks the theme color and which side of `appointment` is "the other
+// participant".
+//   * Video/audio: src/hooks/useAgoraCall.js (channel 'consult_' + room_id)
 //   * Chat (saved, synced with mobile): src/hooks/useConsultationChat.js
 //   * Call history (initiated / joined / cancelled / ended): src/lib/callLog.js
 export default function CallRoom({ appointment, user, isDoctor, onBack }) {
@@ -44,24 +55,15 @@ export default function CallRoom({ appointment, user, isDoctor, onBack }) {
   const tokenRef   = useRef(null)    // for the keepalive 'leave' on tab close
   const loggedErr  = useRef('')
 
-  const {
-    localStream, remoteStream, remoteJoined, status, error, endReason,
-    micOn, camOn, toggleMic, toggleCam, hangUp,
-  } = useWebRTCCall({
-    roomId: appointment.id,
-    userId: user.id,
-    isInitiator: isDoctor, // doctor always makes the offer — avoids both sides offering at once
-    enabled: callActive,
-  })
-
+  // The chat hook also fetches the consultation room, whose room_id names
+  // the shared Agora channel.
   const chat = useConsultationChat({ appointmentId: appointment.id, userId: user.id })
+  const channel = agoraChannelFor(chat.roomId)
 
-  // Callback refs rather than useRef + effect: the <video> elements are
-  // conditionally rendered (e.g. the self-preview unmounts when the camera
-  // is toggled off), and an effect keyed on the stream wouldn't re-run when
-  // a fresh element mounts later, leaving it black.
-  const attachLocal  = el => { if (el && el.srcObject !== localStream)  el.srcObject = localStream }
-  const attachRemote = el => { if (el && el.srcObject !== remoteStream) el.srcObject = remoteStream }
+  const {
+    localVideoTrack, remoteVideoTrack, remoteJoined, status, error, endReason,
+    micOn, camOn, toggleMic, toggleCam, hangUp,
+  } = useAgoraCall({ channel, enabled: callActive })
 
   function leaveLogged(detail) {
     if (!inCall.current) return
@@ -164,8 +166,8 @@ export default function CallRoom({ appointment, user, isDoctor, onBack }) {
             {callActive ? (
               <div className="w-full h-full relative">
                 {/* Remote video (or placeholder until they join) */}
-                {remoteJoined && remoteStream ? (
-                  <video ref={attachRemote} autoPlay playsInline className="w-full h-full object-cover"/>
+                {remoteJoined && remoteVideoTrack ? (
+                  <AgoraVideo track={remoteVideoTrack} className="w-full h-full"/>
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
                     <div className="text-center">
@@ -175,7 +177,7 @@ export default function CallRoom({ appointment, user, isDoctor, onBack }) {
                       <p className="text-white font-semibold">{otherName}</p>
                       <p className="text-gray-400 text-sm">{otherSub}</p>
                       <p className="text-gray-400 text-xs mt-3">
-                        {error || (status === 'waiting' && !remoteJoined ? `Calling ${otherName}... they'll see that you're calling.` : STATUS_LABEL[status]) || 'Waiting for them to join...'}
+                        {error || (remoteJoined ? 'Camera is off' : status === 'waiting' ? `Calling ${otherName}... they'll see that you're calling.` : STATUS_LABEL[status]) || 'Waiting for them to join...'}
                       </p>
                     </div>
                   </div>
@@ -183,8 +185,8 @@ export default function CallRoom({ appointment, user, isDoctor, onBack }) {
 
                 {/* Self preview */}
                 <div className="absolute bottom-4 right-4 w-28 h-20 bg-gray-700 rounded-xl overflow-hidden border-2 border-gray-600">
-                  {camOn && localStream
-                    ? <video ref={attachLocal} autoPlay playsInline muted className="w-full h-full object-cover"/>
+                  {camOn && localVideoTrack
+                    ? <AgoraVideo track={localVideoTrack} className="w-full h-full"/>
                     : <div className="w-full h-full flex items-center justify-center"><VideoOff className="w-5 h-5 text-gray-400"/></div>
                   }
                 </div>
@@ -205,9 +207,9 @@ export default function CallRoom({ appointment, user, isDoctor, onBack }) {
                 {status === 'ended' && endReason && (
                   <p className="text-gray-300 text-sm mb-4 max-w-xs mx-auto">{endReason}</p>
                 )}
-                <button onClick={startCall}
-                  className="flex items-center gap-2 bg-green-500 hover:bg-green-400 text-white font-semibold px-8 py-3 rounded-xl transition-all mx-auto">
-                  <Video className="w-5 h-5"/> {isDoctor ? 'Start Call' : 'Join Call'}
+                <button onClick={startCall} disabled={!channel}
+                  className="flex items-center gap-2 bg-green-500 hover:bg-green-400 disabled:opacity-50 disabled:cursor-wait text-white font-semibold px-8 py-3 rounded-xl transition-all mx-auto">
+                  <Video className="w-5 h-5"/> {!channel ? 'Preparing room...' : isDoctor ? 'Start Call' : 'Join Call'}
                 </button>
               </div>
             )}

@@ -179,15 +179,30 @@ writes them directly.
 filtered by `patient_id=eq.<me>` (or `doctor_id`) and show a "calling you"
 prompt while a row is `ringing` and `initiated_by` isn't you.
 
-### Video signaling channel is now private
+### Video: Agora on both sides (updated 2026-11-21)
 
-WebRTC signaling uses the Realtime channel `call:<appointment id>`
-(broadcast `signal` / `hangup` / `restart-request` events + presence keyed
-by user id). It is now a **private** channel: join it with
-`{ config: { private: true, … } }` while signed in. Only that
-appointment's doctor and patient are authorized; anyone else gets
-"Unauthorized". If mobile joins this channel without `private: true`, it
-won't see the web side's messages.
+The web portal no longer uses its own WebRTC signaling. It now uses the
+**Agora Web SDK** (`agora-rtc-sdk-ng`) with the same Agora project as
+mobile, so web and mobile can see and hear each other:
+
+- App ID `4f62a0f5e5d14354a84bd84798bdb0be` (testing mode, no token).
+- Channel: `'consult_' || consultation_sessions.room_id` — the web gets the
+  row from `get_or_create_consultation_session`, same as mobile.
+- Web joins with **uid = null** (Agora assigns one) and publishes camera +
+  microphone (audio only if the camera is unavailable), codec `vp8`.
+  Mobile should either let Agora assign the uid (0) or use a fixed uid
+  that differs between doctor and patient.
+- Leaving the channel normally ends the call on the other side; a dropped
+  connection doesn't (the other side waits for a rejoin).
+- Call history is still recorded through `log_call_event` (start / leave /
+  failed) — please use option (a): mobile calls the RPC and stops writing
+  `consultation_sessions` status/duration itself.
+- The old Supabase Realtime channel `call:<appointment id>` is no longer
+  used by the web.
+
+Before real patients use it: enable the App Certificate in the Agora
+console and issue short-lived tokens (planned as a Supabase Edge Function
+that only gives tokens to the appointment's doctor and patient).
 
 ## Open items for the IS team
 

@@ -21,6 +21,7 @@ const HISTORY_LIMIT = 300
  */
 export default function useConsultationChat({ appointmentId, userId, enabled = true }) {
   const [sessionId, setSessionId] = useState(null)
+  const [roomId, setRoomId]       = useState(null) // consultation_sessions.room_id — also names the Agora video channel
   const [messages, setMessages]   = useState([]) // sorted, each { id, sender_id, content, sent_at, is_read, message_type, _state? }
   const [status, setStatus]       = useState('connecting') // connecting | live | offline | error
   const [error, setError]         = useState('')
@@ -55,12 +56,13 @@ export default function useConsultationChat({ appointmentId, userId, enabled = t
   useEffect(() => {
     if (!enabled || !appointmentId) return
     let cancelled = false
-    setSessionId(null); setMessages([]); setStatus('connecting'); setError('')
+    setSessionId(null); setRoomId(null); setMessages([]); setStatus('connecting'); setError('')
     supabase.rpc('get_or_create_consultation_session', { p_appointment_id: appointmentId })
       .then(({ data, error: err }) => {
         if (cancelled) return
         if (err || !data?.id) { setStatus('error'); setError(`Chat unavailable: ${err?.message || 'no consultation room'}`); return }
         setSessionId(data.id)
+        setRoomId(data.room_id || null)
       })
     return () => { cancelled = true }
   }, [appointmentId, enabled])
@@ -125,5 +127,5 @@ export default function useConsultationChat({ appointmentId, userId, enabled = t
       .then(({ error: err }) => { if (err) console.warn('Could not mark messages read:', err.message) })
   }, [unreadKey])
 
-  return { messages, send, retry, status, error, ready: !!sessionId }
+  return { messages, send, retry, status, error, ready: !!sessionId, roomId }
 }
