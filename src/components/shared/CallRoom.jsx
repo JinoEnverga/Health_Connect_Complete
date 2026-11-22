@@ -63,7 +63,7 @@ export default function CallRoom({ appointment, user, isDoctor, onBack }) {
   const {
     localVideoTrack, remoteVideoTrack, remoteJoined, status, error, endReason,
     micOn, camOn, toggleMic, toggleCam, hangUp,
-  } = useAgoraCall({ channel, enabled: callActive })
+  } = useAgoraCall({ appointmentId: appointment.id, channel, enabled: callActive })
 
   function leaveLogged(detail) {
     if (!inCall.current) return

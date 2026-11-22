@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AGORA_APP_ID } from '../lib/agora'
+import { AGORA_APP_ID, fetchAgoraToken } from '../lib/agora'
+import { supabase } from '../lib/supabase'
 
 /**
  * Two-person video call over Agora, interoperable with the mobile app
@@ -9,6 +10,11 @@ import { AGORA_APP_ID } from '../lib/agora'
  * Agora handles the media relay, NAT traversal and reconnection; this hook
  * only manages the local tracks and the single remote participant.
  *
+ * Tokens: before joining, the hook asks the `agora-token` Edge Function for a
+ * token (and the channel it was made for), and renews it before it expires.
+ * If the function isn't deployed (404) it joins with the App ID alone, which
+ * only works while the Agora project is in testing mode.
+ *
  * The SDK is loaded on demand (dynamic import) so it isn't in the main bundle.
  *
  * status: idle | waiting | connected | reconnecting | ended | error
@@ -16,7 +22,7 @@ import { AGORA_APP_ID } from '../lib/agora'
  * Returns { localVideoTrack, remoteVideoTrack, remoteJoined, status, error,
  *           endReason, micOn, camOn, toggleMic, toggleCam, hangUp }
  */
-export default function useAgoraCall({ channel, enabled }) {
+export default function useAgoraCall({ appointmentId, channel, enabled }) {
   const [status, setStatus]                 = useState('idle')
   const [error, setError]                   = useState('')
   const [endReason, setEndReason]           = useState('')
@@ -65,6 +71,17 @@ export default function useAgoraCall({ channel, enabled }) {
         AgoraRTC.setLogLevel(2) // warnings and errors only
       } catch {
         if (!cancelled) { setStatus('error'); setError('Could not load the video library. Check your internet connection and try again.') }
+        return
+      }
+      if (cancelled) return
+
+      // 0. Token for this appointment (and the channel it is valid for).
+      let token = null, joinChannel = channel
+      try {
+        const t = await fetchAgoraToken(supabase, appointmentId)
+        if (t.token) { token = t.token; joinChannel = t.channel }
+      } catch (e) {
+        if (!cancelled) { setStatus('error'); setError(e.message) }
         return
       }
       if (cancelled) return
@@ -118,6 +135,20 @@ export default function useAgoraCall({ channel, enabled }) {
         }
       })
 
+      // Renew the token before it runs out (long consultations).
+      client.on('token-privilege-will-expire', async () => {
+        try {
+          const t = await fetchAgoraToken(supabase, appointmentId)
+          if (t.token) await client.renewToken(t.token)
+        } catch (e) {
+          setError(`Could not renew the call token: ${e.message}`)
+        }
+      })
+      client.on('token-privilege-did-expire', () => {
+        setStatus('error')
+        setError('The call token expired. Hang up and join the call again.')
+      })
+
       // 1. Camera + microphone. Fall back to audio-only if the camera fails.
       let audio = null, video = null
       try {
@@ -141,9 +172,9 @@ export default function useAgoraCall({ channel, enabled }) {
       tracksRef.current = { audio, video }
       setLocalVideo(video)
 
-      // 2. Join the shared channel (testing mode: no token, Agora assigns the uid).
+      // 2. Join the shared channel; Agora assigns the uid (token is valid for uid 0 = any).
       try {
-        await client.join(AGORA_APP_ID, channel, null, null)
+        await client.join(AGORA_APP_ID, joinChannel, token, null)
         if (cancelled) return
         await client.publish([audio, video].filter(Boolean))
       } catch (e) {
@@ -155,7 +186,7 @@ export default function useAgoraCall({ channel, enabled }) {
     })()
 
     return () => { cancelled = true; teardown() }
-  }, [enabled, channel, teardown, endCall])
+  }, [enabled, channel, appointmentId, teardown, endCall])
 
   const toggleMic = useCallback(async () => {
     const t = tracksRef.current.audio
