@@ -15,6 +15,24 @@ body { @apply bg-gray-50 text-gray-900; }
 .sidebar-bhw     { background: linear-gradient(180deg, #115e59 0%, #0d9488 100%); }
 .sidebar-admin   { background: linear-gradient(180deg, #14532d 0%, #16a34a 100%); }
 
+/* Text boxes live in Tailwind's components layer so a page's own utility
+   classes win — e.g. `input pl-10` leaves room for an icon inside the box.
+   (Outside a layer, these rules come after the utilities and override them.) */
+@layer components {
+  .input {
+    @apply w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none
+           focus:ring-2 focus:ring-patient-500 focus:border-transparent transition-all;
+  }
+  .input-doctor {
+    @apply w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none
+           focus:ring-2 focus:ring-doctor-500 focus:border-transparent transition-all;
+  }
+  .input-bhw {
+    @apply w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none
+           focus:ring-2 focus:ring-bhw-500 focus:border-transparent transition-all;
+  }
+}
+
 .card { @apply bg-white rounded-2xl shadow-sm border border-gray-100 p-6; }
 .btn-primary-patient {
   @apply bg-patient-600 hover:bg-patient-700 text-white font-semibold px-6 py-3 rounded-xl
@@ -27,14 +45,6 @@ body { @apply bg-gray-50 text-gray-900; }
 .btn-outline {
   @apply border border-gray-300 hover:border-gray-400 text-gray-700 font-medium px-4 py-2
          rounded-xl transition-all duration-200 flex items-center gap-2 bg-white;
-}
-.input {
-  @apply w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none
-         focus:ring-2 focus:ring-patient-500 focus:border-transparent transition-all;
-}
-.input-doctor {
-  @apply w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none
-         focus:ring-2 focus:ring-doctor-500 focus:border-transparent transition-all;
 }
 .btn-primary-doctor {
   @apply bg-doctor-600 hover:bg-doctor-700 text-white font-semibold px-6 py-3 rounded-xl
@@ -54,10 +64,6 @@ body { @apply bg-gray-50 text-gray-900; }
 .btn-primary-admin {
   @apply bg-admin-600 hover:bg-admin-700 text-white font-semibold px-6 py-3 rounded-xl
          transition-all duration-200 flex items-center gap-2 justify-center;
-}
-.input-bhw {
-  @apply w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none
-         focus:ring-2 focus:ring-bhw-500 focus:border-transparent transition-all;
 }
 
 /* Printing a digital prescription: only the document marked as the print

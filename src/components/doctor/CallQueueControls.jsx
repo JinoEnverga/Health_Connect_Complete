@@ -4,15 +4,16 @@ import { PlayCircle, CheckCircle2, UserX, FileText, ChevronRight } from 'lucide-
 import { supabase } from '../../lib/supabase'
 import { statusMeta } from '../../lib/queue'
 
-const APPT_SELECT = '*, patient:profiles!appointments_patient_id_fkey(first_name, last_name)'
+const APPT_SELECT = '*, patient:profiles!appointments_patient_id_fkey(first_name, last_name, email)'
 
 const minutesSince = ts => ts ? Math.max(0, Math.floor((Date.now() - new Date(ts).getTime()) / 60_000)) : 0
 const nameOf = a => a?.patient ? `${a.patient.first_name || ''} ${a.patient.last_name || ''}`.trim() || 'Patient' : 'Patient'
 
 /**
  * The doctor's consultation controls inside the video call, so they don't
- * have to go back to the dashboard: Start / No-show / Complete, then Call Next
- * (opens the next patient's call) and Issue Prescription.
+ * have to go back to the dashboard: Start / No-show / Complete, Issue
+ * Prescription (patient pre-filled; new tab during a call), then Call Next
+ * (opens the next patient's call).
  *
  * Queue appointments (block_id set) follow the queue rules enforced by the
  * database (010_availability_queue.sql): waiting -> in_progress ->
@@ -92,6 +93,16 @@ export default function CallQueueControls({ appointment, onEndCall, onOpenNext }
     onOpenNext?.(data[0])
   }
 
+  // Opens the prescription form with this patient + appointment filled in.
+  // During a call it opens in a new tab so the call keeps running.
+  function issuePrescription() {
+    const qs = new URLSearchParams({ patientId: appt.patient_id, appointmentId: appt.id })
+    if (appt.patient?.email) qs.set('patientEmail', appt.patient.email)
+    const url = `/doctor/prescribe?${qs}`
+    if (onEndCall) window.open(url, '_blank', 'noopener')
+    else navigate(url)
+  }
+
   const meta = statusMeta(appt.status)
   const done = ['completed', 'no_show', 'cancelled'].includes(appt.status)
 
@@ -139,9 +150,10 @@ export default function CallQueueControls({ appointment, onEndCall, onOpenNext }
             </>
           )}
 
-          {/* After the consultation */}
-          {appt.status === 'completed' && (
-            <button onClick={() => navigate('/doctor/prescribe', { state: { patientId: appt.patient_id, appointmentId: appt.id } })}
+          {/* Prescription: during or after the consultation */}
+          {!['cancelled', 'no_show'].includes(appt.status) && (
+            <button onClick={issuePrescription}
+              title={onEndCall ? 'Opens in a new tab — the call keeps running' : undefined}
               className="btn-outline text-sm px-3 py-2">
               <FileText className="w-4 h-4"/> Issue Prescription
             </button>

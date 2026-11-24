@@ -87,3 +87,27 @@ export const WEEKDAYS = [
   { iso: 1, short: 'Mon' }, { iso: 2, short: 'Tue' }, { iso: 3, short: 'Wed' },
   { iso: 4, short: 'Thu' }, { iso: 5, short: 'Fri' }, { iso: 6, short: 'Sat' }, { iso: 7, short: 'Sun' },
 ]
+
+// One display format for dates and times across the call screens:
+// 'Nov 24, 2026' and 'Nov 24, 2026 · 9:00 AM' (Philippine time).
+export function formatDate(date) {
+  if (!date) return ''
+  return new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', {
+    timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric',
+  })
+}
+export function formatTimeOnly(ts) {
+  if (!ts) return ''
+  return new Date(ts).toLocaleTimeString('en-US', { timeZone: TZ, hour: 'numeric', minute: '2-digit' })
+}
+export function formatDateTime(ts) {
+  if (!ts) return ''
+  const d = new Date(ts)
+  const day = d.toLocaleDateString('en-US', { timeZone: TZ, month: 'short', day: 'numeric', year: 'numeric' })
+  return `${day} · ${formatTimeOnly(ts)}`
+}
+// Normalise a stored time slot ('09:00 AM', '9:00 AM') to '9:00 AM'.
+export function formatSlot(slot) {
+  if (!slot) return ''
+  return slot.replace(/ /g, ' ').replace(/^0(\d:)/, '$1').replace(/\s*[–-]\s*0(\d:)/, ' – $1')
+}

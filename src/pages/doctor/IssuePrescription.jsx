@@ -22,7 +22,14 @@ export default function IssuePrescription() {
   const { user, profile } = useAuth()
   const location   = useLocation()
   const navigate   = useNavigate()
-  const pre        = location.state || {}
+  // Pre-fill from the call screen / appointments: router state, or the URL
+  // (?patientId=&patientEmail=&appointmentId=) when opened in a new tab.
+  const query      = new URLSearchParams(location.search)
+  const pre        = {
+    patientId:     location.state?.patientId     || query.get('patientId')     || '',
+    patientEmail:  location.state?.patientEmail  || query.get('patientEmail')  || '',
+    appointmentId: location.state?.appointmentId || query.get('appointmentId') || '',
+  }
 
   const [patients, setPatients]     = useState([])  // from this doctor's appointments
   const [patient, setPatient]       = useState(null) // { id, first_name, last_name, email }
@@ -53,7 +60,13 @@ export default function IssuePrescription() {
         const list = [...seen.values()].sort((x, y) => `${x.first_name} ${x.last_name}`.localeCompare(`${y.first_name} ${y.last_name}`))
         setPatients(list)
         const preselect = list.find(p => p.id === pre.patientId || (pre.patientEmail && p.email === pre.patientEmail))
-        if (preselect) setPatient(preselect)
+        if (preselect) {
+          setPatient(preselect)
+          if (preselect.email) setEmailQuery(preselect.email)
+        } else if (pre.patientId) {
+          // Not in the list (profile not visible yet) — still use the id we were given.
+          setPatient({ id: pre.patientId, email: pre.patientEmail, first_name: '', last_name: '' })
+        }
       })
   }, [user])
 
