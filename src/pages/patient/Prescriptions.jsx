@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { FileText, Lock, ChevronDown, ChevronUp, Info, Download } from 'lucide-react'
+import { FileText, Lock, ChevronDown, ChevronLeft, ChevronRight, Info, Download, Search, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import DigitalPrescription from '../../components/shared/DigitalPrescription'
@@ -8,7 +8,7 @@ import DigitalPrescription from '../../components/shared/DigitalPrescription'
 const STATUS_COLORS = {
   active:    'badge-active',
   dispensed: 'bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-full',
-  expired:   'bg-red-100 text-red-700 text-xs font-semibold px-2 py-1 rounded-full',
+  expired:   'bg-amber-100 text-amber-700 text-xs font-semibold px-2 py-1 rounded-full',
   revoked:   'bg-gray-100 text-gray-500 text-xs font-semibold px-2 py-1 rounded-full',
 }
 
@@ -16,6 +16,22 @@ const STATUS_COLORS = {
 // boundary. The real boundary is Supabase Storage RLS on the patient's own
 // folder (see supabase/sql/004_prescription_file_upload.sql) — this check
 // just confirms it's really you before handing over a download link.
+const PAGE_SIZE = 6
+const TABS = ['all', 'active', 'dispensed', 'expired']
+const HOWTO_KEY = 'hc-rx-howto-collapsed'
+
+const fmtDay = ts => ts
+  ? new Date(ts).toLocaleDateString('en-US', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric' })
+  : '—'
+const isPastDue = rx => !!rx.expires_at && new Date(rx.expires_at) < new Date()
+// An active prescription past its expiry date shows as Expired.
+const displayStatus = rx => (rx.status === 'active' && isPastDue(rx)) ? 'expired' : rx.status
+const conditionOf = rx => {
+  const d = (rx.diagnosis || '').trim()
+  return !d || /^n\/?a$/i.test(d) ? 'General Prescription' : d
+}
+const doctorNameOf = rx => rx.doctor ? `Dr. ${rx.doctor.first_name || ''} ${rx.doctor.last_name || ''}`.trim() : 'Your doctor'
+
 const MAX_ATTEMPTS = 5
 const COOLDOWN_MS  = 30_000
 const SIGNED_URL_SECONDS = 120
@@ -91,40 +107,36 @@ function RxCard({ rx, patient, onPrinted }) {
 
   const isImage = details?.file_type?.startsWith('image/')
 
+  const status = displayStatus(rx)
+
   return (
-    <div className="card border border-gray-100">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3 mb-3">
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 bg-patient-100 rounded-xl flex items-center justify-center shrink-0">
-            <FileText className="w-5 h-5 text-patient-600"/>
-          </div>
-          <div>
-            <p className="font-bold text-gray-900">{rx.diagnosis}</p>
-            <p className="text-xs text-gray-500 mt-0.5">
-              {rx.doctor ? `Dr. ${rx.doctor.first_name || ''} ${rx.doctor.last_name || ''}`.trim() + ' · ' : ''}
-              Issued {new Date(rx.issued_at).toLocaleDateString('en-PH', { year:'numeric', month:'short', day:'numeric' })}
-            </p>
-          </div>
+    <div>
+      {/* Row */}
+      <div className="flex items-center gap-3 px-4 sm:px-5 py-3">
+        <div className="w-9 h-9 bg-patient-100 rounded-xl flex items-center justify-center shrink-0">
+          <FileText className="w-4 h-4 text-patient-600"/>
         </div>
-        <span className={STATUS_COLORS[rx.status] || STATUS_COLORS.active}>
-          {rx.status.charAt(0).toUpperCase() + rx.status.slice(1)}
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-gray-900 text-sm truncate">{conditionOf(rx)}</p>
+          <p className="text-xs text-gray-500 truncate">
+            {doctorNameOf(rx)} · Issued {fmtDay(rx.issued_at)} ·{' '}
+            <span className={status === 'expired' ? 'text-amber-700' : ''}>
+              {isPastDue(rx) ? 'Expired' : 'Expires'} {fmtDay(rx.expires_at)}
+            </span>
+          </p>
+        </div>
+        <span className={`shrink-0 ${STATUS_COLORS[status] || STATUS_COLORS.active}`}>
+          {status.charAt(0).toUpperCase() + status.slice(1)}
         </span>
+        <button onClick={() => setExpanded(e => !e)} aria-expanded={expanded}
+          className="shrink-0 flex items-center gap-1 text-sm font-semibold text-patient-600 hover:text-patient-700 px-2 py-1 rounded-lg hover:bg-patient-50 transition-colors">
+          {expanded ? 'Hide' : 'View'}<span className="hidden sm:inline">&nbsp;Prescription</span>
+          <ChevronDown className={`w-4 h-4 transition-transform ${expanded ? 'rotate-180' : ''}`}/>
+        </button>
       </div>
-
-      <div className="text-xs text-gray-500 mb-3">
-        Expires: <span className="font-medium text-gray-700">{new Date(rx.expires_at).toLocaleDateString('en-PH', { year:'numeric', month:'short', day:'numeric' })}</span>
-      </div>
-
-      {/* View Prescription — inline unlock, no navigation */}
-      <button onClick={() => setExpanded(e => !e)}
-        className="flex items-center gap-2 text-sm font-semibold text-patient-600 hover:text-patient-700 transition-colors">
-        {expanded ? <ChevronUp className="w-4 h-4"/> : <ChevronDown className="w-4 h-4"/>}
-        {expanded ? 'Hide' : 'View'} Prescription
-      </button>
 
       {expanded && (
-        <div className="mt-3">
+        <div className="px-4 sm:px-5 pb-4">
           {!unlocked ? (
             needsBirthYear ? (
               <div className="bg-amber-50 border-2 border-dashed border-amber-200 rounded-xl p-5 text-center">
@@ -239,6 +251,20 @@ export default function Prescriptions() {
     setRxList(list => list.map(r => r.id === id ? { ...r, ...fields } : r))
   }
 
+  const [search,  setSearch]  = useState('')
+  const [tab,     setTab]     = useState('all')
+  const [page,    setPage]    = useState(0)
+  const [howtoCollapsed, setHowtoCollapsed] = useState(() => {
+    try { return localStorage.getItem(HOWTO_KEY) === '1' } catch { return false }
+  })
+
+  function toggleHowto() {
+    setHowtoCollapsed(c => {
+      try { localStorage.setItem(HOWTO_KEY, c ? '0' : '1') } catch { /* storage unavailable */ }
+      return !c
+    })
+  }
+
   useEffect(() => {
     if (!user) return
     supabase
@@ -250,39 +276,112 @@ export default function Prescriptions() {
       .then(({ data }) => { setRxList(data || []); setLoading(false) })
   }, [user])
 
+  const counts = useMemo(() => {
+    const c = { all: rxList.length, active: 0, dispensed: 0, expired: 0 }
+    rxList.forEach(r => { const st = displayStatus(r); if (st in c) c[st]++ })
+    return c
+  }, [rxList])
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return rxList.filter(r => {
+      if (tab !== 'all' && displayStatus(r) !== tab) return false
+      if (!q) return true
+      return conditionOf(r).toLowerCase().includes(q) || doctorNameOf(r).toLowerCase().includes(q)
+    })
+  }, [rxList, tab, search])
+
+  useEffect(() => { setPage(0) }, [tab, search])
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const current   = Math.min(page, pageCount - 1)
+  const pageItems = filtered.slice(current * PAGE_SIZE, (current + 1) * PAGE_SIZE)
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">E-Prescriptions</h1>
-        <p className="text-gray-500 text-sm mt-1">Secure digital prescriptions from your doctor</p>
+    <div className="space-y-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">E-Prescriptions</h1>
+          <p className="text-gray-500 text-sm mt-1">Secure digital prescriptions from your doctor</p>
+        </div>
+        <button onClick={toggleHowto} aria-expanded={!howtoCollapsed}
+          className="shrink-0 flex items-center gap-1.5 text-sm font-semibold text-patient-600 bg-patient-50 hover:bg-patient-100 border border-patient-100 px-3 py-1.5 rounded-xl transition-colors">
+          <Info className="w-4 h-4"/> How it works
+        </button>
       </div>
 
-      {/* How to use banner */}
-      <div className="bg-patient-50 border border-patient-100 rounded-2xl p-4 flex items-start gap-3">
-        <Info className="w-5 h-5 text-patient-600 shrink-0 mt-0.5"/>
-        <p className="text-sm text-patient-800">
-          <strong>How to use:</strong> Tap "View Prescription" and enter your birth year to unlock it.
-          Then use <strong>Print Official Copy</strong> and bring the printed sheet to the pharmacy. Official copies are
-          limited (1 + refills), so print only when your printer is ready. If you buy only part of your medicine,
-          the pharmacist records it on the sheet — keep it for your next purchase.
-        </p>
-      </div>
-
-      {loading ? (
-        <div className="space-y-3">
-          {[1,2].map(i => <div key={i} className="card animate-pulse h-40 bg-gray-50"/>)}
-        </div>
-      ) : rxList.length === 0 ? (
-        <div className="card flex flex-col items-center justify-center py-16 text-center">
-          <FileText className="w-14 h-14 text-gray-200 mb-3"/>
-          <p className="font-semibold text-gray-500 text-lg">No prescriptions yet</p>
-          <p className="text-gray-400 text-sm mt-1">Prescriptions from your doctor will appear here after your consultation</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {rxList.map(rx => <RxCard key={rx.id} rx={rx} patient={profile || {}} onPrinted={patchRx}/>)}
+      {/* How it works (collapsible; remembered on this device) */}
+      {!howtoCollapsed && (
+        <div className="bg-patient-50 border border-patient-100 rounded-2xl p-4 flex items-start gap-3">
+          <Info className="w-5 h-5 text-patient-600 shrink-0 mt-0.5"/>
+          <div className="text-sm text-patient-800 space-y-1 flex-1">
+            <p><strong>1. Unlock:</strong> tap <em>View Prescription</em> and enter your birth year.</p>
+            <p><strong>2. Print:</strong> use <em>Print Official Copy</em> and bring the printed sheet to the pharmacy.
+              Official copies have a limited number of prints based on your prescribed refills, so print only when your printer is ready.</p>
+            <p><strong>3. Partial purchases:</strong> if you buy only part of your medicine, the pharmacist records it on the
+              sheet. Keep it for your next purchase.</p>
+          </div>
+          <button onClick={toggleHowto} aria-label="Hide how it works"
+            className="p-1 rounded-lg text-patient-400 hover:text-patient-700 hover:bg-patient-100 shrink-0">
+            <X className="w-4 h-4"/>
+          </button>
         </div>
       )}
+
+      {/* Search + status tabs */}
+      <div className="flex flex-col md:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-3.5 w-4 h-4 text-gray-400"/>
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search by doctor or condition..." className="input pl-10"/>
+        </div>
+        <div className="flex gap-1 bg-gray-100 rounded-xl p-1 shrink-0 overflow-x-auto">
+          {TABS.map(t => (
+            <button key={t} onClick={() => setTab(t)}
+              className={`text-sm font-semibold px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap ${tab === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+              {t.charAt(0).toUpperCase() + t.slice(1)}
+              <span className={`text-[11px] px-1.5 rounded-full ${tab === t ? 'bg-patient-50 text-patient-700' : 'bg-gray-200 text-gray-500'}`}>{counts[t]}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* List */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        {loading ? (
+          <div className="divide-y divide-gray-100">
+            {[1, 2, 3].map(i => <div key={i} className="h-16 animate-pulse bg-gray-50/60"/>)}
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-14 text-center px-4">
+            <FileText className="w-12 h-12 text-gray-200 mb-3"/>
+            <p className="font-semibold text-gray-500">{rxList.length === 0 ? 'No prescriptions yet' : 'No prescriptions match'}</p>
+            {rxList.length === 0 && (
+              <p className="text-gray-400 text-sm mt-1">Prescriptions from your doctor will appear here after your consultation</p>
+            )}
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {pageItems.map(rx => <RxCard key={rx.id} rx={rx} patient={profile || {}} onPrinted={patchRx}/>)}
+          </div>
+        )}
+
+        {!loading && filtered.length > PAGE_SIZE && (
+          <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-t border-gray-100">
+            <button onClick={() => setPage(current - 1)} disabled={current === 0}
+              className="flex items-center gap-1 text-xs font-semibold text-gray-600 px-2.5 py-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-40 disabled:hover:bg-transparent">
+              <ChevronLeft className="w-3.5 h-3.5"/> Previous
+            </button>
+            <span className="text-xs text-gray-500">
+              {current * PAGE_SIZE + 1}–{Math.min((current + 1) * PAGE_SIZE, filtered.length)} of {filtered.length}
+            </span>
+            <button onClick={() => setPage(current + 1)} disabled={current >= pageCount - 1}
+              className="flex items-center gap-1 text-xs font-semibold text-gray-600 px-2.5 py-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-40 disabled:hover:bg-transparent">
+              Next <ChevronRight className="w-3.5 h-3.5"/>
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

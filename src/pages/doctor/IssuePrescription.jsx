@@ -38,10 +38,14 @@ export default function IssuePrescription() {
   const [appts, setAppts]           = useState([])
   const [appointmentId, setAppointmentId] = useState(pre.appointmentId || '')
 
-  const [diagnosis, setDiagnosis]   = useState('')
-  const [notes, setNotes]           = useState('')
+  // "Renew Rx" from All Prescriptions passes the earlier prescription along.
+  const renewFrom = location.state?.renew || null
+  const [diagnosis, setDiagnosis]   = useState(renewFrom?.diagnosis || '')
+  const [notes, setNotes]           = useState(renewFrom?.notes || '')
   const [validDays, setValidDays]   = useState(30)
-  const [meds, setMeds]             = useState([emptyMed()])
+  const [meds, setMeds]             = useState(() => renewFrom?.medications?.length
+    ? renewFrom.medications.map(m => ({ ...emptyMed(), ...m, key: crypto.randomUUID() }))
+    : [emptyMed()])
 
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')

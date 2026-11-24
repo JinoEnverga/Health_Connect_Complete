@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { forwardRef, useEffect, useImperativeHandle, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Printer, Lock, AlertTriangle, X } from 'lucide-react'
 import TelemedicineLogo from '../TelemedicineLogo'
@@ -32,7 +32,7 @@ const LEDGER_ROWS = 6
  *   mode        'patient' | 'doctor'
  *   onOfficialPrint  async () => { copy_number, max_prints, copy_label, printed_at }  (patient mode; throws on refusal)
  */
-export default function DigitalPrescription({ rx, medications = [], doctor = {}, patient = {}, mode = 'doctor', onOfficialPrint }) {
+const DigitalPrescription = forwardRef(function DigitalPrescription({ rx, medications = [], doctor = {}, patient = {}, mode = 'doctor', onOfficialPrint }, ref) {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [busy, setBusy]               = useState(false)
   const [error, setError]             = useState('')
@@ -82,6 +82,10 @@ export default function DigitalPrescription({ rx, medications = [], doctor = {},
   function printFileCopy() {
     setPrintInfo({ official: false, printed_at: new Date().toISOString() })
   }
+
+  // Lets a parent trigger the doctor's file-copy print (e.g. a "Print / PDF"
+  // button elsewhere on the page). Doctor mode only.
+  useImperativeHandle(ref, () => ({ printFileCopy }), [])
 
   const official = printInfo?.official
   const watermarkText = official
@@ -291,4 +295,6 @@ export default function DigitalPrescription({ rx, medications = [], doctor = {},
       )}
     </div>
   )
-}
+})
+
+export default DigitalPrescription

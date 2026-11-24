@@ -136,8 +136,8 @@ export default function CallHistory({ role, userId, limit = 50 }) {
         </h2>
         <div className="relative w-full sm:w-44">
           <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-gray-400"/>
-          <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search name..."
-            className="w-full text-sm bg-gray-50 border border-gray-100 rounded-lg pl-8 pr-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"/>
+          <input value={query} onChange={e => setQuery(e.target.value)} placeholder={isDoctor ? 'Search patient...' : 'Search doctor...'}
+            className={`w-full text-sm bg-gray-50 border border-gray-100 rounded-lg pl-8 pr-2 py-1.5 focus:outline-none focus:ring-2 ${isDoctor ? 'focus:ring-emerald-500' : 'focus:ring-patient-500'}`}/>
         </div>
       </div>
       <div className="flex gap-1 bg-gray-100 rounded-lg p-1 mb-3">
@@ -201,12 +201,10 @@ export default function CallHistory({ role, userId, limit = 50 }) {
                     {c.appointment?.chief_complaint && (
                       <p><span className="text-gray-400">Reason for visit:</span> <span className="text-gray-700">{c.appointment.chief_complaint}</span></p>
                     )}
-                    {isDoctor && (
-                      <div>
-                        <p className="text-gray-400">Consultation notes</p>
-                        <p className="text-gray-700 whitespace-pre-line">{c.appointment?.doctor_notes || 'No notes for this appointment.'}</p>
-                      </div>
-                    )}
+                    <div>
+                      <p className="text-gray-400">{isDoctor ? 'Consultation notes' : "Doctor's notes"}</p>
+                      <p className="text-gray-700 whitespace-pre-line">{c.appointment?.doctor_notes || 'No notes for this appointment.'}</p>
+                    </div>
 
                     {/* Timeline */}
                     <div>

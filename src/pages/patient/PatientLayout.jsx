@@ -116,7 +116,9 @@ export default function PatientLayout() {
           <button onClick={() => setMobileOpen(true)} className="lg:hidden p-2 rounded-lg hover:bg-gray-100">
             <Menu className="w-5 h-5 text-gray-600"/>
           </button>
-          <div className="flex-1"/>
+          <span className="text-xs font-bold text-patient-600 bg-patient-50 px-3 py-1 rounded-full border border-patient-100">
+            Patient Portal
+          </span>
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-patient-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
               {initials}

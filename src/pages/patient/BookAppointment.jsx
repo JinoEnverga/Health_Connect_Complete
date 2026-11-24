@@ -12,6 +12,11 @@ export default function BookAppointment() {
   const location  = useLocation()
   const { user }  = useAuth()
   const preDoc    = location.state?.doctor
+  // From My Appointments: "Book Again" / "Reschedule" pass the doctor's id;
+  // "Reschedule" also passes the appointment to cancel once the new one is booked.
+  const preDocId     = location.state?.doctorId || null
+  const rescheduleId = location.state?.rescheduleId || null
+  const [rescheduled, setRescheduled] = useState(null) // null | 'done' | error message
 
   const [doctors, setDoctors]     = useState([])
   const [selected, setSelected]   = useState(preDoc || null)
@@ -26,7 +31,10 @@ export default function BookAppointment() {
 
   useEffect(() => {
     supabase.from('doctor_directory').select('*').eq('is_accepting_patients', true)
-      .then(({ data }) => setDoctors(data || []))
+      .then(({ data }) => {
+        setDoctors(data || [])
+        if (preDocId) setSelected(prev => prev || (data || []).find(d => d.user_id === preDocId) || null)
+      })
   }, [])
 
   const loadBlocks = useCallback(async () => {
@@ -101,6 +109,15 @@ export default function BookAppointment() {
       .select('id, queue_number, estimated_time, appointment_date')
       .eq('id', inserted.id)
       .single()
+    // Rescheduling: the new spot is secured, now give up the old one.
+    if (rescheduleId) {
+      const { data: gone, error: cancelErr } = await supabase.from('appointments')
+        .update({ status: 'cancelled' }).eq('id', rescheduleId).in('status', ['upcoming', 'waiting']).select('id')
+      setRescheduled(cancelErr || !gone?.length
+        ? 'Your new spot is booked, but the old appointment could not be cancelled automatically — please cancel it in My Appointments.'
+        : 'done')
+    }
+
     setBooked({ ...appt, block: chosen })
     setLoading(false)
   }
@@ -113,6 +130,12 @@ export default function BookAppointment() {
         </div>
         <h2 className="text-xl font-bold text-gray-900 mb-1">You're in the queue!</h2>
         <p className="text-gray-500 text-sm mb-6">Your estimated time updates live as the doctor sees each patient.</p>
+        {rescheduled === 'done' && (
+          <p className="text-sm text-patient-700 bg-patient-50 rounded-xl px-4 py-2 mb-4 w-full">Rescheduled — your previous appointment was cancelled.</p>
+        )}
+        {rescheduled && rescheduled !== 'done' && (
+          <p className="text-sm text-amber-800 bg-amber-50 rounded-xl px-4 py-2 mb-4 w-full">{rescheduled}</p>
+        )}
         <div className="grid grid-cols-2 gap-3 w-full mb-4">
           <div className="bg-patient-50 rounded-xl py-4">
             <p className="text-xs text-gray-500 uppercase tracking-wide">Queue number</p>
@@ -147,10 +170,16 @@ export default function BookAppointment() {
           <ArrowLeft className="w-5 h-5 text-gray-600"/>
         </button>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Book Appointment</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{rescheduleId ? 'Reschedule Appointment' : 'Book Appointment'}</h1>
           <p className="text-gray-500 text-sm">Join a doctor's queue for an available time block</p>
         </div>
       </div>
+
+      {rescheduleId && (
+        <div className="bg-patient-50 border border-patient-100 text-patient-800 rounded-xl px-4 py-3 text-sm">
+          Pick a new time block. Your current appointment stays booked until the new one is confirmed, then it&apos;s cancelled automatically.
+        </div>
+      )}
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">{error}</div>}
 
