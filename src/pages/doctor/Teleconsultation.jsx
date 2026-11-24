@@ -98,5 +98,7 @@ export default function DoctorTeleconsultation() {
     </div>
   )
 
-  return <CallRoom appointment={appointment} user={user} isDoctor={true} onBack={() => setAppointment(null)}/>
+  // key: a fresh call room per patient when "Call Next" switches appointments.
+  return <CallRoom key={appointment.id} appointment={appointment} user={user} isDoctor={true}
+    onBack={() => setAppointment(null)} onOpenAppointment={setAppointment}/>
 }

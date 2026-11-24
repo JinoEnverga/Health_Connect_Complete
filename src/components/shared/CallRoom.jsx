@@ -5,6 +5,7 @@ import { agoraChannelFor } from '../../lib/agora'
 import useConsultationChat from '../../hooks/useConsultationChat'
 import { supabase } from '../../lib/supabase'
 import { logCallEvent, logCallLeaveOnUnload } from '../../lib/callLog'
+import CallQueueControls from '../doctor/CallQueueControls'
 
 const STATUS_LABEL = {
   waiting:      'Waiting for the other person...',
@@ -42,7 +43,7 @@ function AgoraVideo({ track, className }) {
 //   * Video/audio: src/hooks/useAgoraCall.js (channel 'consult_' + room_id)
 //   * Chat (saved, synced with mobile): src/hooks/useConsultationChat.js
 //   * Call history (initiated / joined / cancelled / ended): src/lib/callLog.js
-export default function CallRoom({ appointment, user, isDoctor, onBack }) {
+export default function CallRoom({ appointment, user, isDoctor, onBack, onOpenAppointment }) {
   const other = isDoctor ? appointment.patient : appointment.doctor
   const otherName = other ? `${isDoctor ? '' : 'Dr. '}${other.first_name} ${other.last_name}` : (isDoctor ? 'Patient' : 'Doctor')
   const otherSub  = isDoctor ? (appointment.chief_complaint || 'Patient') : (other?.doctor_profiles?.specialization || 'Specialist')
@@ -157,6 +158,14 @@ export default function CallRoom({ appointment, user, isDoctor, onBack }) {
           </p>
         </div>
       </div>
+
+      {/* Doctor: finish the consultation / call the next patient without leaving the call */}
+      {isDoctor && (
+        <CallQueueControls
+          appointment={appointment}
+          onEndCall={callActive ? hangUp : null}
+          onOpenNext={onOpenAppointment}/>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4" style={{ height: 'calc(100vh - 220px)', minHeight: '500px' }}>
 
