@@ -6,6 +6,11 @@ import { useAuth } from '../../contexts/AuthContext'
 
 const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
 const DAY_FULL = { Mon:'Monday', Tue:'Tuesday', Wed:'Wednesday', Thu:'Thursday', Fri:'Friday', Sat:'Saturday', Sun:'Sunday' }
+// Mobile build 2009 saves EXACT DATES ('YYYY-MM-DD') in available_days; if a
+// row has any, the dates are the whole schedule and must not be replaced by
+// weekday names (shared rule A2 with the mobile app).
+const isDate = d => /^\d{4}-\d{2}-\d{2}$/.test(d)
+const fmtDate = d => new Date(`${d}T12:00:00Z`).toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' })
 
 const SPECIALIZATIONS = [
   'General Practice','Internal Medicine','Cardiology','Dermatology','Neurology',
@@ -72,6 +77,7 @@ export default function DoctorProfile() {
         .eq('id', user.id)
       if (e1) throw e1
 
+      const usesDates = form.available_days.some(isDate)
       const { error: e2 } = await supabase.from('doctor_profiles')
         .upsert({
           user_id:              user.id,
@@ -83,7 +89,8 @@ export default function DoctorProfile() {
           clinic_phone:         form.clinic_phone,
           consultation_fee:     form.consultation_fee ? parseFloat(form.consultation_fee) : 0,
           bio:                  form.bio,
-          available_days:       form.available_days,
+          // Dates set on the mobile app are left exactly as they are.
+          ...(usesDates ? {} : { available_days: form.available_days }),
           available_time_slots: form.available_time_slots,
           is_accepting_patients: form.is_accepting_patients,
         }, { onConflict: 'user_id' })
@@ -223,6 +230,16 @@ export default function DoctorProfile() {
           <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2 text-sm">
             🕐 Available Days
           </h3>
+          {form.available_days.some(isDate) ? (
+            <div>
+              <div className="flex flex-wrap gap-2">
+                {form.available_days.filter(isDate).sort().map(d => (
+                  <span key={d} className="px-3 py-1.5 rounded-xl text-sm font-semibold bg-doctor-600 text-white">{fmtDate(d)}</span>
+                ))}
+              </div>
+              <p className="text-xs text-gray-400 mt-2">These exact dates were set in the mobile app. Change them there.</p>
+            </div>
+          ) : (
           <div className="flex flex-wrap gap-2">
             {DAYS.map(d => {
               const active = form.available_days.includes(DAY_FULL[d])
@@ -240,7 +257,8 @@ export default function DoctorProfile() {
               )
             })}
           </div>
-          {editing && <p className="text-xs text-gray-400 mt-2">Click to toggle available days</p>}
+          )}
+          {editing && !form.available_days.some(isDate) && <p className="text-xs text-gray-400 mt-2">Click to toggle available days</p>}
         </div>
 
         {/* Scheduling now lives on the Availability page (time blocks + queue) */}

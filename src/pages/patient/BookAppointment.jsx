@@ -213,7 +213,7 @@ export default function BookAppointment() {
                 <p className="text-patient-600 text-xs font-medium">{selected.specialization}</p>
                 <p className="text-gray-500 text-xs flex items-center gap-2 mt-0.5">
                   <Star className="w-3 h-3 text-yellow-400 fill-yellow-400"/>
-                  {selected.average_rating != null ? Number(selected.average_rating).toFixed(1) : 'N/A'} · ₱{selected.consultation_fee} per session
+                  {selected.average_rating != null ? Number(selected.average_rating).toFixed(1) : 'N/A'}
                 </p>
               </div>
             </div>

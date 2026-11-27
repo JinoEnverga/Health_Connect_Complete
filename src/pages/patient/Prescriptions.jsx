@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { FileText, Lock, ChevronDown, ChevronLeft, ChevronRight, Info, Download, Search, X } from 'lucide-react'
+import { FileText, Lock, ChevronDown, ChevronLeft, ChevronRight, Info, Download, Search, X, BadgeCheck } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import DigitalPrescription from '../../components/shared/DigitalPrescription'
@@ -75,8 +75,18 @@ function RxCard({ rx, patient, onPrinted }) {
       return
     }
 
+    // Pharmacist-marked page (Pharmacy Mode on the mobile app) wins over
+    // everything else: never show the clean page of a dispensed prescription.
+    let markedUrl = null
+    if (rx.annotated_image_url) {
+      const { data: signed } = await supabase.storage
+        .from('prescriptions')
+        .createSignedUrl(rx.annotated_image_url, SIGNED_URL_SECONDS)
+      markedUrl = signed?.signedUrl || null
+    }
+
     let downloadUrl = null
-    if (data.prescription.file_path) {
+    if (data.prescription.file_path && !rx.annotated_image_url) {
       const { data: signed } = await supabase.storage
         .from('prescription-files')
         .createSignedUrl(data.prescription.file_path, SIGNED_URL_SECONDS)
@@ -84,7 +94,7 @@ function RxCard({ rx, patient, onPrinted }) {
     }
 
     setChecking(false)
-    setDetails({ ...data.prescription, downloadUrl })
+    setDetails({ ...data.prescription, downloadUrl, markedUrl })
     setUnlocked(true)
     setAttempts(0)
   }
@@ -168,6 +178,25 @@ function RxCard({ rx, patient, onPrinted }) {
             )
           ) : (
             <div className="space-y-3">
+              {rx.status === 'dispensed' && (
+                <div className="bg-blue-50 border border-blue-100 text-blue-800 rounded-xl px-3 py-2 text-sm flex items-center gap-2">
+                  <BadgeCheck className="w-4 h-4 shrink-0"/>
+                  <span>
+                    Dispensed{rx.dispensed_at ? ` on ${fmtDay(rx.dispensed_at)}` : ''}
+                    {rx.dispensed_by_name ? ` by ${rx.dispensed_by_name}` : ''}
+                    {rx.dispensed_by_license ? ` (PRC ${rx.dispensed_by_license})` : ''}
+                  </span>
+                </div>
+              )}
+
+              {rx.annotated_image_url ? (
+                <div className="bg-white border border-gray-200 rounded-xl p-2">
+                  <p className="text-xs font-semibold text-gray-600 mb-2 px-1">Pharmacist-marked page (final)</p>
+                  {details.markedUrl
+                    ? <img src={details.markedUrl} alt="Prescription marked by the pharmacist" className="max-h-[32rem] w-auto max-w-full mx-auto rounded-lg"/>
+                    : <p className="text-gray-400 text-xs px-1 pb-1">This page could not be loaded. Please try again.</p>}
+                </div>
+              ) : (<>
               {details.file_path && (
                 <div className="bg-gradient-to-r from-patient-50 to-blue-50 rounded-xl p-4 flex items-center gap-3">
                   <div className="w-10 h-10 bg-white border border-patient-200 rounded-lg flex items-center justify-center shrink-0">
@@ -175,7 +204,7 @@ function RxCard({ rx, patient, onPrinted }) {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-gray-900 text-sm truncate">{details.file_name || 'Prescription file'}</p>
-                    <p className="text-xs text-gray-500">Uploaded prescription (issued before digital prescriptions)</p>
+                    <p className="text-xs text-gray-500">Photo of your doctor&apos;s prescription</p>
                   </div>
                   {details.downloadUrl
                     ? <a href={details.downloadUrl} download={details.file_name} target="_blank" rel="noreferrer"
@@ -215,6 +244,7 @@ function RxCard({ rx, patient, onPrinted }) {
               {!details.file_path && !(details.medications?.length > 0) && (
                 <p className="text-gray-400 text-sm">No medications on record for this prescription.</p>
               )}
+              </>)}
             </div>
           )}
         </div>

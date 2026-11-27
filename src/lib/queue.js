@@ -19,7 +19,7 @@ export const STATUS_META = {
   in_progress: { label: 'In Progress', cls: 'bg-emerald-100 text-emerald-700' },
   completed:   { label: 'Completed',   cls: 'bg-blue-100 text-blue-700' },
   cancelled:   { label: 'Cancelled',   cls: 'bg-red-100 text-red-700' },
-  no_show:     { label: 'No Show',     cls: 'bg-gray-100 text-gray-600' },
+  no_show:     { label: 'Missed',      cls: 'bg-gray-100 text-gray-600' },
 }
 
 export function statusMeta(status) {

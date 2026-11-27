@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Send, CheckCircle, User, Pill, Plus, Trash2, Search, FileText } from 'lucide-react'
+import { ArrowLeft, Send, CheckCircle, User, Pill, Plus, Trash2, Search, FileText, AlertTriangle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import DigitalPrescription from '../../components/shared/DigitalPrescription'
@@ -84,6 +84,32 @@ export default function IssuePrescription() {
       .then(({ data }) => setAppts(data || []))
   }, [patient?.id])
 
+  // One active prescription per patient (panel rule, shared with mobile).
+  // Doctors can only see their own prescriptions, so this catches ours; the
+  // database's unique index (planned) is what catches another doctor's.
+  const [activeRx, setActiveRx]   = useState(null)
+  const [revoking, setRevoking]   = useState(false)
+  useEffect(() => {
+    setActiveRx(null)
+    if (!patient?.id) return
+    supabase.from('prescriptions')
+      .select('id, diagnosis, issued_at, expires_at')
+      .eq('doctor_id', user.id).eq('patient_id', patient.id).eq('status', 'active')
+      .gt('expires_at', new Date().toISOString())
+      .order('issued_at', { ascending: false }).limit(1)
+      .then(({ data }) => setActiveRx(data?.[0] || null))
+  }, [patient?.id])
+
+  async function revokeActive() {
+    if (!activeRx) return
+    if (!window.confirm(`Revoke the active prescription "${activeRx.diagnosis || 'Prescription'}"? The patient will no longer be able to use it.`)) return
+    setRevoking(true); setError('')
+    const { error: err } = await supabase.from('prescriptions').update({ status: 'revoked' }).eq('id', activeRx.id).eq('status', 'active')
+    setRevoking(false)
+    if (err) { setError(`Could not revoke the prescription: ${err.message}`); return }
+    setActiveRx(null)
+  }
+
   async function lookupByEmail() {
     const email = emailQuery.trim()
     if (!email) return
@@ -107,6 +133,7 @@ export default function IssuePrescription() {
     e.preventDefault()
     setError('')
     if (!patient) { setError('Choose a patient first.'); return }
+    if (activeRx) { setError('This patient already has an active prescription from you. Revoke it first, then issue the new one.'); return }
     if (!diagnosis.trim()) { setError('A diagnosis is required.'); return }
     const incomplete = meds.findIndex(m => !m.medicine_name.trim() || !m.dosage.trim() || !m.frequency.trim() || !m.duration.trim())
     if (incomplete !== -1) { setError(`Medication ${incomplete + 1}: fill in the name, dosage, frequency and duration.`); return }
@@ -125,7 +152,12 @@ export default function IssuePrescription() {
       p_appointment_id:   appointmentId || null,
       p_valid_days:       Number(validDays),
     })
-    if (rpcErr) { setError(rpcErr.message); setLoading(false); return }
+    if (rpcErr) {
+      setError(rpcErr.code === '23505'
+        ? 'This patient already has an active prescription (possibly from another doctor). It must be revoked or expire before a new one can be issued.'
+        : rpcErr.message)
+      setLoading(false); return
+    }
 
     const [{ data: dp }, { data: pat }] = await Promise.all([
       supabase.from('doctor_profiles').select('specialization, license_number, clinic_name, clinic_address, clinic_phone').eq('user_id', user.id).maybeSingle(),
@@ -302,7 +334,22 @@ export default function IssuePrescription() {
           </div>
         </div>
 
-        <button type="submit" disabled={loading} className="btn-primary-doctor w-full py-4 text-base disabled:opacity-60">
+        {activeRx && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-900 flex flex-wrap items-center gap-3">
+            <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600"/>
+            <p className="flex-1 min-w-[12rem]">
+              This patient already has an active prescription from you: <strong>{activeRx.diagnosis || 'Prescription'}</strong>
+              {' '}(issued {new Date(activeRx.issued_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}).
+              Only one active prescription is allowed per patient.
+            </p>
+            <button type="button" onClick={revokeActive} disabled={revoking}
+              className="text-xs font-semibold text-red-600 border border-red-200 hover:border-red-400 bg-white px-3 py-1.5 rounded-xl disabled:opacity-50">
+              {revoking ? 'Revoking...' : 'Revoke it and continue'}
+            </button>
+          </div>
+        )}
+
+        <button type="submit" disabled={loading || !!activeRx} className="btn-primary-doctor w-full py-4 text-base disabled:opacity-60">
           {loading
             ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"/>
             : <><Send className="w-5 h-5"/> Issue Digital Prescription</>}

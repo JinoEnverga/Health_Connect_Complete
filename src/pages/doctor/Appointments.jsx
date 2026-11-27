@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react'
-import { Calendar, RefreshCw, Search, CheckCircle, XCircle, FileText, ChevronDown, Video, PlayCircle } from 'lucide-react'
+import { Calendar, RefreshCw, Search, CheckCircle, XCircle, FileText, ChevronDown, Video, PlayCircle, BadgeCheck } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
-import { isActive, statusMeta, formatDay, formatTimestamp } from '../../lib/queue'
+import { isActive, statusMeta, formatDay, formatTimestamp, manilaToday } from '../../lib/queue'
+import { postSystemMessage, SYSTEM, FEE_PREFIX, formatFee } from '../../lib/chatSystem'
 
 const TABS = ['All', 'Upcoming', 'Completed', 'Cancelled']
 
@@ -26,6 +27,8 @@ export default function DoctorAppointments() {
   const [expanded, setExpanded] = useState(null)
   const [notes, setNotes]      = useState({})
   const [actionError, setActionError] = useState('')
+  const [accepted, setAccepted] = useState(() => new Set()) // appointment ids with the fee line posted
+  const [accepting, setAccepting] = useState(null)
 
   useEffect(() => { if (user) load() }, [user])
 
@@ -38,13 +41,49 @@ export default function DoctorAppointments() {
       .order('appointment_date', { ascending: false })
     setAppts(data || [])
     setLoading(false)
+    loadAccepted(data || [])
+  }
+
+  // "Accepted" = the doctor's 'Booking accepted · Consultation fee: …' line
+  // exists in the appointment's chat (shared rule with the mobile app; no
+  // column records it).
+  async function loadAccepted(list) {
+    const open = list.filter(a => isActive(a.status)).map(a => a.id)
+    if (!open.length) { setAccepted(new Set()); return }
+    const { data: sessions } = await supabase.from('consultation_sessions')
+      .select('id, appointment_id').in('appointment_id', open)
+    if (!sessions?.length) { setAccepted(new Set()); return }
+    const { data: lines } = await supabase.from('chat_logs')
+      .select('session_id').in('session_id', sessions.map(s => s.id))
+      .eq('message_type', 'system').eq('sender_id', user.id).like('content', `${FEE_PREFIX}%`)
+    const done = new Set((lines || []).map(l => l.session_id))
+    setAccepted(new Set(sessions.filter(s => done.has(s.id)).map(s => s.appointment_id)))
+  }
+
+  async function accept(a) {
+    setAccepting(a.id); setActionError('')
+    const { data: dp } = await supabase.from('doctor_profiles')
+      .select('consultation_fee, currency').eq('user_id', user.id).maybeSingle()
+    const ok = await postSystemMessage(a.id, user.id, FEE_PREFIX + formatFee(dp?.consultation_fee, dp?.currency))
+    setAccepting(null)
+    if (ok) setAccepted(prev => new Set(prev).add(a.id))
+    else loadAccepted(appts) // posted moments ago already, or failed — re-check
   }
 
   async function updateStatus(id, status) {
+    const appt = appts.find(a => a.id === id)
+    // Shared rule with mobile: an appointment dated in the future can't be completed.
+    if (status === 'completed' && appt && appt.appointment_date > manilaToday()) {
+      setActionError("This appointment is on a future date, so it can't be marked completed yet.")
+      return
+    }
     setUpdating(id); setActionError('')
     const { error } = await supabase.from('appointments').update({ status }).eq('id', id)
     if (error) setActionError(`Could not update the appointment: ${error.message}`)
-    else setAppts(prev => prev.map(a => a.id === id ? { ...a, status } : a))
+    else {
+      setAppts(prev => prev.map(a => a.id === id ? { ...a, status } : a))
+      if (status === 'completed') postSystemMessage(id, user.id, SYSTEM.consultationEnded)
+    }
     setUpdating(null)
   }
 
@@ -211,6 +250,19 @@ export default function DoctorAppointments() {
                             No Show
                           </button>
                         </>
+                      )}
+                      {(a.status === 'upcoming' || a.status === 'waiting') && (
+                        accepted.has(a.id) ? (
+                          <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-xl">
+                            <BadgeCheck className="w-3.5 h-3.5"/> Accepted
+                          </span>
+                        ) : (
+                          <button onClick={() => accept(a)} disabled={accepting === a.id}
+                            title="Posts the consultation fee in the chat"
+                            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-all disabled:opacity-50">
+                            <BadgeCheck className="w-3.5 h-3.5"/> {accepting === a.id ? 'Accepting...' : 'Accept Booking'}
+                          </button>
+                        )
                       )}
                       {a.status === 'upcoming' && (
                         <>

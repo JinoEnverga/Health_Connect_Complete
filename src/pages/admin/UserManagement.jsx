@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
-import { Search, RefreshCw, CheckCircle } from 'lucide-react'
+import { Search, RefreshCw, CheckCircle, Ban, RotateCcw } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 
 const ROLES = ['all', 'patient', 'bhw', 'doctor', 'admin']
 
@@ -18,6 +19,28 @@ export default function UserManagement() {
   const [roleTab, setRoleTab]   = useState('all')
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState('')
+  const [busy, setBusy]         = useState(null)
+  const { user: me } = useAuth()
+
+  // Roles and account access change only through admin functions
+  // (admin_set_user_role / admin_set_user_active, 017_mobile_contract_part_c.sql);
+  // blocking also stops sign-in on the mobile app.
+  async function changeRole(u, role) {
+    if (role === u.role) return
+    if (!window.confirm(`Change ${u.first_name || 'this user'}'s role from ${u.role} to ${role}?`)) return
+    setBusy(u.id); setError('')
+    const { error: err } = await supabase.rpc('admin_set_user_role', { p_user_id: u.id, p_role: role })
+    setBusy(null)
+    if (err) setError(`Could not change the role: ${err.message}`); else load()
+  }
+
+  async function setActive(u, active) {
+    if (!window.confirm(active ? `Restore access for ${u.first_name || 'this user'}?` : `Block ${u.first_name || 'this user'} from signing in (website and mobile app)?`)) return
+    setBusy(u.id); setError('')
+    const { error: err } = await supabase.rpc('admin_set_user_active', { p_user_id: u.id, p_active: active })
+    setBusy(null)
+    if (err) setError(`Could not change account access: ${err.message}`); else load()
+  }
 
   useEffect(() => { load() }, [])
 
@@ -38,7 +61,7 @@ export default function UserManagement() {
     setLoading(true); setError('')
     const { data, error: loadErr } = await supabase
       .from('profiles')
-      .select('id, role, first_name, last_name, email, created_at')
+      .select('id, role, first_name, last_name, email, created_at, is_active, last_login_at')
       .order('created_at', { ascending: false })
     if (loadErr) setError(`Could not load users: ${loadErr.message}`)
     setUsers(data || [])
@@ -132,10 +155,36 @@ export default function UserManagement() {
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-gray-900">{name}</p>
                   <p className="text-gray-500 text-xs truncate">{u.email || '—'}</p>
-                  <span className={`mt-1 inline-block ${roleBadge[u.role] || 'badge-pending'} capitalize`}>
-                    {u.role === 'bhw' ? 'BHW' : u.role === 'admin' ? 'Admin' : u.role}
-                  </span>
+                  <div className="flex flex-wrap items-center gap-2 mt-1">
+                    <span className={`inline-block ${roleBadge[u.role] || 'badge-pending'} capitalize`}>
+                      {u.role === 'bhw' ? 'BHW' : u.role === 'admin' ? 'Admin' : u.role}
+                    </span>
+                    {u.is_active === false && <span className="text-xs font-semibold bg-red-100 text-red-700 px-2 py-0.5 rounded-full">Blocked</span>}
+                    {u.last_login_at && <span className="text-[11px] text-gray-400">Last login {new Date(u.last_login_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</span>}
+                  </div>
                 </div>
+                {u.id !== me?.id && (
+                  <div className="flex items-center gap-2 shrink-0">
+                    <select value={u.role} disabled={busy === u.id} onChange={e => changeRole(u, e.target.value)}
+                      aria-label="Role" className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white disabled:opacity-50">
+                      <option value="patient">Patient</option>
+                      <option value="doctor">Doctor</option>
+                      <option value="bhw">BHW</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                    {u.is_active === false ? (
+                      <button onClick={() => setActive(u, true)} disabled={busy === u.id}
+                        className="text-xs font-semibold text-emerald-700 border border-emerald-200 hover:bg-emerald-50 px-2.5 py-1.5 rounded-lg flex items-center gap-1 disabled:opacity-50">
+                        <RotateCcw className="w-3.5 h-3.5"/> Restore
+                      </button>
+                    ) : (
+                      <button onClick={() => setActive(u, false)} disabled={busy === u.id}
+                        className="text-xs font-semibold text-red-600 border border-red-200 hover:bg-red-50 px-2.5 py-1.5 rounded-lg flex items-center gap-1 disabled:opacity-50">
+                        <Ban className="w-3.5 h-3.5"/> Block
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             )
           })}

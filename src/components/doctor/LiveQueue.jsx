@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { ListOrdered, PlayCircle, CheckCircle2, UserX, Video, Clock, CalendarPlus, RefreshCw } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { manilaToday, formatRange, formatTimestamp, blockPhase, statusMeta } from '../../lib/queue'
+import { postSystemMessage, SYSTEM } from '../../lib/chatSystem'
 
 // Pick which of today's blocks to show by default: the one happening now,
 // else the next one today, else the latest one that still has people
@@ -108,6 +109,7 @@ export default function LiveQueue({ doctorId }) {
     setActing(null)
     if (err) { setError(err.message); return }
     if (!data?.length) setError('That patient\'s status changed (they may have cancelled). The queue has been refreshed.')
+    else if (status === 'completed') postSystemMessage(appt.id, doctorId, SYSTEM.consultationEnded)
     loadQueue(blockId)
   }
 

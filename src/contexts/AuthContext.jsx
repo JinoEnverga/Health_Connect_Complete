@@ -118,12 +118,24 @@ export function AuthProvider({ children }) {
     return data
   }
 
+  // The handle_new_user trigger reads ONLY role, first_name, last_name and
+  // phone from sign-up metadata (shared contract with the mobile app); any
+  // other key is dropped. Birth year (it unlocks prescriptions) is saved to
+  // patient_profiles right after sign-up instead.
   async function signUp(email, password, role = 'patient', extraData = {}) {
-    const { data, error } = await supabase.auth.signUp({
-      email, password,
-      options: { data: { role, ...extraData } },
-    })
+    const meta = { role }
+    for (const k of ['first_name', 'last_name', 'phone']) {
+      if (extraData[k] != null && extraData[k] !== '') meta[k] = extraData[k]
+    }
+    const { data, error } = await supabase.auth.signUp({ email, password, options: { data: meta } })
     if (error) throw error
+
+    const birthYear = Number(extraData.birth_year)
+    if (role === 'patient' && data?.session && data.user && birthYear) {
+      const { error: byErr } = await supabase.from('patient_profiles')
+        .update({ birth_year: birthYear }).eq('user_id', data.user.id)
+      if (byErr) console.warn('Could not save birth year after sign-up:', byErr.message)
+    }
     return data
   }
 

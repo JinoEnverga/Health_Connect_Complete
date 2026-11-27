@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LiveQueue from '../../components/doctor/LiveQueue'
 import { isActive, statusMeta, relativeDay } from '../../lib/queue'
+import AnnouncementsFeed from '../../components/shared/AnnouncementsFeed'
 
 function StatCard({ icon: Icon, value, label, sub, color, bg }) {
   return (
@@ -58,6 +59,7 @@ export default function DoctorDashboard() {
 
   return (
     <div className="space-y-6">
+      <AnnouncementsFeed tone="doctor"/>
       {/* Hero Banner */}
       <div className="bg-gradient-to-r from-doctor-800 to-doctor-600 rounded-2xl p-6 text-white relative overflow-hidden">
         <div className="absolute right-6 top-4 opacity-10">

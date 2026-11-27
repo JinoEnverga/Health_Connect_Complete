@@ -3,9 +3,10 @@ import { ClipboardList, RefreshCw, Search, Calendar, User, FileText, Heart, Stet
 import { supabase } from '../../lib/supabase'
 import { formatDuration } from '../../components/shared/CallHistory'
 
-const EVENT_TYPES = ['all', 'call', 'appointment', 'prescription', 'vitals', 'profile']
+const EVENT_TYPES = ['all', 'activity', 'call', 'appointment', 'prescription', 'vitals', 'profile']
 
 const eventIcon = {
+  activity:     ClipboardList,
   call:         PhoneCall,
   appointment:  Calendar,
   prescription: FileText,
@@ -14,6 +15,7 @@ const eventIcon = {
 }
 
 const eventColor = {
+  activity:     'text-gray-700 bg-gray-100',
   call:         'text-emerald-600 bg-emerald-50',
   appointment:  'text-orange-500 bg-orange-50',
   prescription: 'text-purple-600 bg-purple-50',
@@ -45,7 +47,7 @@ export default function AuditLogs() {
 
   async function load() {
     setLoading(true)
-    const [callRes, apptRes, rxRes, vitalsRes, printRes] = await Promise.all([
+    const [callRes, apptRes, rxRes, vitalsRes, printRes, auditRes] = await Promise.all([
       supabase.from('call_logs')
         .select(`id, status, initiated_at, duration_seconds, end_reason,
           doctor:profiles!call_logs_doctor_id_fkey(first_name, last_name),
@@ -63,7 +65,18 @@ export default function AuditLogs() {
       supabase.from('prescription_print_log')
         .select('id, event, copy_number, max_prints, copy_label, reason, created_at, actor:profiles!prescription_print_log_actor_id_fkey(first_name, last_name)')
         .order('created_at', { ascending: false }).limit(30),
+      // Shared with the mobile app (AuditService): user_id, action, table_name, record_id.
+      supabase.from('audit_logs')
+        .select('id, user_id, action, table_name, record_id, created_at')
+        .order('created_at', { ascending: false }).limit(50),
     ])
+
+    // audit_logs.user_id points at auth.users, so look the names up separately.
+    const auditIds = [...new Set((auditRes.data || []).map(a => a.user_id).filter(Boolean))]
+    const { data: auditUsers } = auditIds.length
+      ? await supabase.from('profiles').select('id, first_name, last_name, role').in('id', auditIds)
+      : { data: [] }
+    const auditName = Object.fromEntries((auditUsers || []).map(u => [u.id, `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.role]))
 
     const callTitle = c => ({
       ringing:   'Call ringing',
@@ -75,6 +88,12 @@ export default function AuditLogs() {
     const nm = p => p ? `${p.first_name || ''} ${p.last_name || ''}`.trim() : ''
 
     const combined = [
+      ...(auditRes.data || []).map(a => ({
+        id: `audit-${a.id}`, type: 'activity',
+        title: `${a.action}${a.table_name ? ` · ${a.table_name}` : ''}`,
+        user_name: auditName[a.user_id] || 'Unknown user',
+        created_at: a.created_at,
+      })),
       ...(callRes.data || []).map(c => ({
         id: `call-${c.id}`, type: 'call',
         title: callTitle(c),

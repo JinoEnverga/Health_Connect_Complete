@@ -5,6 +5,17 @@ import { supabase } from '../../lib/supabase'
 
 const SPECS = ['All Specializations','General Practice','Cardiology','Dermatology','Neurology','Orthopedics','Pediatrics','Psychiatry','Obstetrics & Gynecology','Ophthalmology','ENT','Pulmonology','Gastroenterology','Internal Medicine','Family Medicine']
 
+// available_days holds exact dates ('2026-12-05', mobile build 2009) or legacy
+// weekday names. If any dates exist they are the whole schedule: show the
+// upcoming ones; otherwise show the weekday names.
+function availableLabels(days = []) {
+  const dates = days.filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d))
+  if (!dates.length) return days
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date())
+  return dates.filter(d => d >= today).sort()
+    .map(d => new Date(`${d}T12:00:00Z`).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' }))
+}
+
 function DoctorCard({ doc, onBook }) {
   const initials = doc.full_name?.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase() || 'DR'
   const colors   = ['bg-blue-500','bg-green-500','bg-purple-500','bg-orange-500','bg-rose-500','bg-teal-500']
@@ -46,13 +57,12 @@ function DoctorCard({ doc, onBook }) {
           <Clock className="w-3.5 h-3.5"/>
           {doc.years_of_experience} years
         </span>
-        <span className="font-bold text-gray-800 ml-auto">₱{doc.consultation_fee?.toFixed(0) || '—'}</span>
       </div>
 
       {doc.available_days?.length > 0 && (
         <div className="flex flex-wrap gap-1 mb-3">
           <span className="text-xs text-gray-400 self-center">Available:</span>
-          {doc.available_days.slice(0,4).map(d => (
+          {availableLabels(doc.available_days).slice(0,4).map(d => (
             <span key={d} className="text-xs bg-patient-50 text-patient-700 px-2 py-0.5 rounded-full font-medium">
               {d.slice(0,3)}
             </span>

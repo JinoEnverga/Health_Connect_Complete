@@ -56,7 +56,10 @@ export default function Login() {
     setLoading(true); setError('')
     try {
       const check = await verifyPasswordOnly(form.email, form.password)
-      if (!check.ok) { setError(check.error); return }
+      if (!check.ok) {
+        setError(/banned/i.test(check.error || '') ? 'This account has been disabled by the administrator.' : check.error)
+        return
+      }
 
       const role = await fetchRoleForUser(check.accessToken, check.userId)
       if (role === 'admin') {
@@ -65,6 +68,14 @@ export default function Login() {
         startResendCooldown()
       } else {
         await signIn(form.email, form.password)
+        // Account switched off by an admin (profiles.is_active).
+        const { data: me } = await supabase.from('profiles').select('is_active').eq('id', check.userId).maybeSingle()
+        if (me && me.is_active === false) {
+          await supabase.auth.signOut()
+          setError('This account has been disabled by the administrator.')
+          return
+        }
+        supabase.rpc('update_last_login').then(() => {}, () => {})
         navigate('/')
       }
     } catch (err) {
@@ -82,6 +93,7 @@ export default function Login() {
         email: form.email, token: otp, type: 'email',
       })
       if (verifyErr) throw verifyErr
+      supabase.rpc('update_last_login').then(() => {}, () => {})
       navigate('/')
     } catch (err) {
       setOtpError(err.message || 'Invalid or expired code.')

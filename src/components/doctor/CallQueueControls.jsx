@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PlayCircle, CheckCircle2, UserX, FileText, ChevronRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { statusMeta } from '../../lib/queue'
+import { statusMeta, manilaToday } from '../../lib/queue'
+import { postSystemMessage, SYSTEM } from '../../lib/chatSystem'
 
 const APPT_SELECT = '*, patient:profiles!appointments_patient_id_fkey(first_name, last_name, email)'
 
@@ -77,9 +78,17 @@ export default function CallQueueControls({ appointment, onEndCall, onOpenNext }
   }
 
   async function finish(status, fromStatus) {
+    // Shared rule with mobile: a future-dated appointment can't be completed.
+    if (status === 'completed' && appt.appointment_date > manilaToday()) {
+      setError("This appointment is on a future date, so it can't be completed yet.")
+      return
+    }
     const label = status === 'completed' ? 'Complete this consultation' : 'Mark this patient as a no-show'
     if (!window.confirm(`${label}${onEndCall ? ' and end the call' : ''}?`)) return
-    if (await setStatus(status, fromStatus)) onEndCall?.()
+    if (await setStatus(status, fromStatus)) {
+      if (status === 'completed') postSystemMessage(appt.id, appt.doctor_id, SYSTEM.consultationEnded)
+      onEndCall?.()
+    }
   }
 
   async function callNext() {

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Search, FileText, Plus, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, Pill, Printer,
-  RotateCcw, CheckCircle2, Repeat, Ban,
+  RotateCcw, Repeat, Ban, BadgeCheck, Camera,
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -118,8 +118,11 @@ function PrintControl({ rx, onUpdated }) {
 /** "Amoxicillin 500 mg · 1 capsule" + "+1 more" — the row's medication preview. */
 function MedPreview({ rx }) {
   const meds = medsOf(rx)
+  if (rx.annotated_image_url) {
+    return <span className="text-xs font-medium bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md">Pharmacist-marked page</span>
+  }
   if (rx.file_path && meds.length === 0) {
-    return <span className="text-xs font-medium bg-gray-100 text-gray-600 px-2 py-0.5 rounded-md">Uploaded file (legacy)</span>
+    return <span className="text-xs font-medium bg-gray-100 text-gray-600 px-2 py-0.5 rounded-md">Photo prescription</span>
   }
   if (meds.length === 0) return <span className="text-xs text-gray-400">No medications</span>
   const first = meds[0]
@@ -137,64 +140,32 @@ function MedPreview({ rx }) {
   )
 }
 
-/** "Mark as Dispensed" form: who dispensed it and an optional note. */
-function DispenseForm({ rx, onDone, onCancel }) {
-  const [by, setBy]         = useState('')
-  const [note, setNote]     = useState('')
-  const [saving, setSaving] = useState(false)
-  const [err, setErr]       = useState('')
-
-  async function submit(e) {
-    e.preventDefault()
-    setSaving(true); setErr('')
-    const { data, error } = await supabase.from('prescriptions')
-      .update({
-        status: 'dispensed', dispensed_at: new Date().toISOString(),
-        dispensed_by_name: by.trim() || null, dispense_notes: note.trim() || null,
-      })
-      .eq('id', rx.id).eq('status', 'active')
-      .select('*').maybeSingle()
-    setSaving(false)
-    if (error) { setErr(`Could not mark as dispensed: ${error.message}`); return }
-    if (!data) { setErr('This prescription is no longer active.'); return }
-    onDone(data)
-  }
-
-  return (
-    <form onSubmit={submit} className="bg-white border border-gray-200 rounded-xl p-3 space-y-2">
-      <p className="text-sm font-semibold text-gray-800">Mark as dispensed</p>
-      <div className="grid sm:grid-cols-2 gap-2">
-        <input value={by} onChange={e => setBy(e.target.value)} maxLength={120}
-          placeholder="Dispensed by (pharmacy / pharmacist)" className="input-doctor text-sm py-2"/>
-        <input value={note} onChange={e => setNote(e.target.value)} maxLength={500}
-          placeholder="Note (optional)" className="input-doctor text-sm py-2"/>
-      </div>
-      {err && <p className="text-xs text-red-600">{err}</p>}
-      <div className="flex justify-end gap-2">
-        <button type="button" onClick={onCancel} className="btn-outline text-xs px-3 py-1.5">Cancel</button>
-        <button type="submit" disabled={saving} className="btn-primary-doctor text-xs px-3 py-1.5 disabled:opacity-50">
-          <CheckCircle2 className="w-3.5 h-3.5"/> {saving ? 'Saving...' : 'Confirm dispensed'}
-        </button>
-      </div>
-    </form>
-  )
-}
-
 /** Expanded details for one prescription: medications, notes, print status, actions. */
 function RxDrawer({ rx, doctor, onUpdated, onRenew }) {
   const docRef = useRef(null)
   const [fileUrl, setFileUrl]       = useState(null)
-  const [dispensing, setDispensing] = useState(false)
+  const [markedUrl, setMarkedUrl]   = useState(null)
   const [revoking, setRevoking]     = useState(false)
   const [err, setErr]               = useState('')
   const meds = medsOf(rx)
-  const isLegacyFile = rx.file_path && meds.length === 0
+  const isPhoto  = rx.file_path && meds.length === 0
+  const isMarked = !!rx.annotated_image_url
+  // What to show, in this order (shared rule with the mobile app):
+  // 1. the pharmacist-marked page, 2. the photo, 3. the medicine list.
+  // Never the clean page of a prescription that has a marked page.
+  const showsList = !isMarked && !isPhoto
 
   useEffect(() => {
-    if (!rx.file_path) return
-    supabase.storage.from('prescription-files').createSignedUrl(rx.file_path, 120)
+    if (!rx.file_path || isMarked) return
+    supabase.storage.from('prescription-files').createSignedUrl(rx.file_path, 300)
       .then(({ data }) => setFileUrl(data?.signedUrl || null))
-  }, [rx.file_path])
+  }, [rx.file_path, isMarked])
+
+  useEffect(() => {
+    if (!isMarked) return
+    supabase.storage.from('prescriptions').createSignedUrl(rx.annotated_image_url, 300)
+      .then(({ data }) => setMarkedUrl(data?.signedUrl || null))
+  }, [rx.annotated_image_url, isMarked])
 
   async function revoke() {
     if (!window.confirm('Revoke this prescription? The patient will no longer be able to use it.')) return
@@ -214,17 +185,33 @@ function RxDrawer({ rx, doctor, onUpdated, onRenew }) {
           {isExpired(rx) ? 'Expired' : 'Valid until'} {fmtDay(rx.expires_at)}
         </span>
         {rx.patient?.email && <span>{rx.patient.email}</span>}
-        {rx.status === 'dispensed' && rx.dispensed_at && (
-          <span className="text-blue-700">
-            Dispensed {formatDateTime(rx.dispensed_at)}{rx.dispensed_by_name ? ` by ${rx.dispensed_by_name}` : ''}
-          </span>
-        )}
       </div>
 
-      {isLegacyFile ? (
+      {rx.status === 'dispensed' && (
+        <div className="bg-blue-50 border border-blue-100 text-blue-800 rounded-xl px-3 py-2 text-sm flex items-center gap-2">
+          <BadgeCheck className="w-4 h-4 shrink-0"/>
+          <span>
+            Dispensed{rx.dispensed_at ? ` on ${formatDateTime(rx.dispensed_at)}` : ''}
+            {rx.dispensed_by_name ? ` by ${rx.dispensed_by_name}` : ''}
+            {rx.dispensed_by_license ? ` (PRC ${rx.dispensed_by_license})` : ''}
+            {rx.dispense_notes ? ` · ${rx.dispense_notes}` : ''}
+          </span>
+        </div>
+      )}
+
+      {isMarked ? (
+        <div className="bg-white border border-gray-200 rounded-xl p-2">
+          <p className="text-xs font-semibold text-gray-600 mb-2 px-1">Pharmacist-marked page (final)</p>
+          {markedUrl
+            ? <a href={markedUrl} target="_blank" rel="noreferrer">
+                <img src={markedUrl} alt="Prescription marked by the pharmacist" className="max-h-[32rem] w-auto max-w-full mx-auto rounded-lg"/>
+              </a>
+            : <p className="text-gray-400 text-xs px-1 pb-1">Loading page...</p>}
+        </div>
+      ) : isPhoto ? (
         <div className="bg-white border border-gray-200 rounded-xl p-3 text-sm">
           <p className="text-xs font-semibold text-gray-600 mb-2 flex items-center gap-1">
-            <FileText className="w-3.5 h-3.5"/> Uploaded prescription file (issued before digital prescriptions)
+            <Camera className="w-3.5 h-3.5"/> Photo prescription
           </p>
           {fileUrl
             ? <a href={fileUrl} target="_blank" rel="noreferrer" download={rx.file_name}
@@ -264,48 +251,27 @@ function RxDrawer({ rx, doctor, onUpdated, onRenew }) {
         </div>
       )}
 
-      {(rx.additional_notes || rx.dispense_notes) && (
-        <div className="grid sm:grid-cols-2 gap-2 text-sm">
-          {rx.additional_notes && (
-            <div className="bg-yellow-50 rounded-xl p-3">
-              <p className="text-xs font-semibold text-yellow-800 mb-0.5">Doctor&apos;s notes</p>
-              <p className="text-yellow-900 whitespace-pre-line">{rx.additional_notes}</p>
-            </div>
-          )}
-          {rx.dispense_notes && (
-            <div className="bg-blue-50 rounded-xl p-3">
-              <p className="text-xs font-semibold text-blue-800 mb-0.5">Dispensing note</p>
-              <p className="text-blue-900 whitespace-pre-line">{rx.dispense_notes}</p>
-            </div>
-          )}
+      {rx.additional_notes && (
+        <div className="bg-yellow-50 rounded-xl p-3 text-sm">
+          <p className="text-xs font-semibold text-yellow-800 mb-0.5">Doctor&apos;s notes</p>
+          <p className="text-yellow-900 whitespace-pre-line">{rx.additional_notes}</p>
         </div>
       )}
 
       {/* Patient print lock status + reprint override */}
-      {!isLegacyFile && <PrintControl rx={rx} onUpdated={onUpdated}/>}
-
-      {dispensing && (
-        <DispenseForm rx={rx}
-          onCancel={() => setDispensing(false)}
-          onDone={row => { setDispensing(false); onUpdated(rx.id, row) }}/>
-      )}
+      <PrintControl rx={rx} onUpdated={onUpdated}/>
 
       {err && <p className="text-xs text-red-600">{err}</p>}
 
       {/* Actions */}
       <div className="flex flex-wrap gap-2">
-        {!isLegacyFile && (
+        {showsList && (
           <button onClick={() => docRef.current?.printFileCopy()} className="btn-outline text-xs px-3 py-1.5"
             title="Doctor's file copy — marked not valid for dispensing">
             <Printer className="w-3.5 h-3.5"/> Print / PDF
           </button>
         )}
-        {rx.status === 'active' && !isExpired(rx) && !dispensing && (
-          <button onClick={() => setDispensing(true)} className="btn-outline text-xs px-3 py-1.5">
-            <CheckCircle2 className="w-3.5 h-3.5"/> Mark as Dispensed
-          </button>
-        )}
-        {!isLegacyFile && (
+        {meds.length > 0 && (
           <button onClick={() => onRenew(rx)} className="btn-primary-doctor text-xs px-3 py-1.5">
             <Repeat className="w-3.5 h-3.5"/> Renew Rx
           </button>
@@ -319,7 +285,7 @@ function RxDrawer({ rx, doctor, onUpdated, onRenew }) {
       </div>
 
       {/* The printable document, kept off-screen; Print / PDF prints it. */}
-      {!isLegacyFile && (
+      {showsList && (
         <div className="hidden">
           <DigitalPrescription ref={docRef} mode="doctor" rx={rx} medications={meds} doctor={doctor} patient={rx.patient || {}}/>
         </div>

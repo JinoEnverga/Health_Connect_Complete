@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Video, VideoOff, Mic, MicOff, PhoneOff, MessageSquare, Send, AlertTriangle, ArrowLeft, RotateCw, CheckCheck, Check } from 'lucide-react'
+import { Video, VideoOff, Mic, MicOff, PhoneOff, MessageSquare, Send, AlertTriangle, ArrowLeft, RotateCw, CheckCheck, Check, BellRing, Receipt } from 'lucide-react'
 import useAgoraCall from '../../hooks/useAgoraCall'
 import { agoraChannelFor } from '../../lib/agora'
 import useConsultationChat from '../../hooks/useConsultationChat'
 import { supabase } from '../../lib/supabase'
 import { logCallEvent, logCallLeaveOnUnload } from '../../lib/callLog'
 import CallQueueControls from '../doctor/CallQueueControls'
+import { useAuth } from '../../contexts/AuthContext'
+import { postSystemMessage, SYSTEM, formatCallDuration, isFeeLine, FEE_PREFIX } from '../../lib/chatSystem'
 
 const STATUS_LABEL = {
   waiting:      'Waiting for the other person...',
@@ -49,7 +51,11 @@ export default function CallRoom({ appointment, user, isDoctor, onBack, onOpenAp
   const otherSub  = isDoctor ? (appointment.chief_complaint || 'Patient') : (other?.doctor_profiles?.specialization || 'Specialist')
   const otherInitials = other ? [other.first_name?.[0], other.last_name?.[0]].filter(Boolean).join('').toUpperCase() : '?'
 
+  const { profile } = useAuth()
+  const me = isDoctor ? 'doctor' : 'patient' // for the shared chat system lines
   const [callActive, setCallActive] = useState(false)
+  const [doctorCallOpen, setDoctorCallOpen] = useState(false) // patient: the doctor has started the call
+  const [notifying, setNotifying] = useState(false)           // patient: ringing the doctor's doorbell
   const [newMsg, setNewMsg] = useState('')
   const chatEndRef = useRef(null)
   const inCall     = useRef(false)   // have we logged 'start' without a matching 'leave'?
@@ -66,20 +72,71 @@ export default function CallRoom({ appointment, user, isDoctor, onBack, onOpenAp
     micOn, camOn, toggleMic, toggleCam, hangUp,
   } = useAgoraCall({ appointmentId: appointment.id, channel, enabled: callActive })
 
-  function leaveLogged(detail) {
+  // Chat system lines use the exact wording shared with the mobile app.
+  const say = text => postSystemMessage(appointment.id, user.id, text)
+
+  async function leaveLogged(detail) {
     if (!inCall.current) return
     inCall.current = false
-    logCallEvent(appointment.id, 'leave', detail)
+    const call = await logCallEvent(appointment.id, 'leave', detail)
+    // null = the call was already closed (e.g. the other side hung up first
+    // and posted the closing lines).
+    if (!call) return
+    await say(SYSTEM.left(me))
+    if (call.ended_by === user.id) {
+      if (call.status === 'ended') await say(SYSTEM.callEnded(formatCallDuration(call.duration_seconds)))
+      else if (call.status === 'cancelled') await say(SYSTEM.missedCall)
+    }
   }
 
   async function startCall() {
     setCallActive(true)
+    setNotifying(false)
     inCall.current = true
     loggedErr.current = ''
     const { data } = await supabase.auth.getSession()
     tokenRef.current = data.session?.access_token || null
-    logCallEvent(appointment.id, 'start')
+    const call = await logCallEvent(appointment.id, 'start')
+    await say(SYSTEM.joined(me))
+    if (isDoctor && call?.status === 'ringing' && call.initiated_by === user.id) await say(SYSTEM.waiting('doctor'))
   }
+
+  // Patient: a patient never starts a call (shared rule with mobile) — they
+  // join once the doctor's call is open. Follow this appointment's calls.
+  useEffect(() => {
+    if (isDoctor) return
+    const check = async () => {
+      const { data } = await supabase.from('call_logs').select('id')
+        .eq('appointment_id', appointment.id).in('status', ['ringing', 'active']).limit(1)
+      setDoctorCallOpen(!!data?.length)
+    }
+    check()
+    const ch = supabase.channel(`call-open-${appointment.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'call_logs', filter: `appointment_id=eq.${appointment.id}` }, check)
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [appointment.id, isDoctor])
+
+  // Patient waiting room: ring the doctor's doorbell (Realtime broadcast
+  // 'doorbell-<doctor id>', same as the mobile app) every 8 s until the call
+  // starts or the patient leaves.
+  useEffect(() => {
+    if (isDoctor || !notifying || callActive) return
+    const payload = {
+      appointment_id: appointment.id, doctor_id: appointment.doctor_id, patient_id: user.id,
+      patient_name: [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || undefined,
+    }
+    const ch = supabase.channel(`doorbell-${appointment.doctor_id}`, { config: { broadcast: { self: false } } })
+    const ring = () => ch.send({ type: 'broadcast', event: 'patient_waiting', payload })
+    let timer = null
+    ch.subscribe(st => { if (st === 'SUBSCRIBED' && !timer) { ring(); timer = setInterval(ring, 8000) } })
+    say(SYSTEM.waiting('patient'))
+    return () => {
+      clearInterval(timer)
+      ch.send({ type: 'broadcast', event: 'patient_left', payload }).finally(() => supabase.removeChannel(ch))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notifying, callActive, isDoctor, appointment.id])
 
   // Call ended (by me, by them, or they dropped): log it, back to "Start Call".
   useEffect(() => {
@@ -216,10 +273,27 @@ export default function CallRoom({ appointment, user, isDoctor, onBack, onOpenAp
                 {status === 'ended' && endReason && (
                   <p className="text-gray-300 text-sm mb-4 max-w-xs mx-auto">{endReason}</p>
                 )}
-                <button onClick={startCall} disabled={!channel}
-                  className="flex items-center gap-2 bg-green-500 hover:bg-green-400 disabled:opacity-50 disabled:cursor-wait text-white font-semibold px-8 py-3 rounded-xl transition-all mx-auto">
-                  <Video className="w-5 h-5"/> {!channel ? 'Preparing room...' : isDoctor ? 'Start Call' : 'Join Call'}
-                </button>
+                {isDoctor || doctorCallOpen ? (
+                  <button onClick={startCall} disabled={!channel}
+                    className="flex items-center gap-2 bg-green-500 hover:bg-green-400 disabled:opacity-50 disabled:cursor-wait text-white font-semibold px-8 py-3 rounded-xl transition-all mx-auto">
+                    <Video className="w-5 h-5"/> {!channel ? 'Preparing room...' : isDoctor ? 'Start Call' : 'Join Call'}
+                  </button>
+                ) : notifying ? (
+                  <div className="space-y-3">
+                    <p className="text-gray-300 text-sm flex items-center justify-center gap-2">
+                      <BellRing className="w-4 h-4 text-amber-400 animate-pulse"/> {otherName} has been notified. Please wait here.
+                    </p>
+                    <button onClick={() => setNotifying(false)} className="text-xs text-gray-400 hover:text-white underline">Stop waiting</button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-gray-400 text-sm">{otherName} will start the call.</p>
+                    <button onClick={() => setNotifying(true)}
+                      className="flex items-center gap-2 bg-patient-600 hover:bg-patient-500 text-white font-semibold px-6 py-3 rounded-xl transition-all mx-auto">
+                      <BellRing className="w-5 h-5"/> I&apos;m ready, notify the doctor
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -278,6 +352,18 @@ export default function CallRoom({ appointment, user, isDoctor, onBack, onOpenAp
             )}
             {chat.messages.map(m => {
               if (m.message_type === 'system') {
+                // Fee card: only when the session's doctor sent the line —
+                // anyone else could type a fake one.
+                if (isFeeLine(m) && m.sender_id === appointment.doctor_id) {
+                  return (
+                    <div key={m.id} className="mx-auto max-w-[85%] bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2 text-center">
+                      <p className="text-xs font-semibold text-emerald-800 flex items-center justify-center gap-1.5">
+                        <Receipt className="w-3.5 h-3.5"/> Booking accepted
+                      </p>
+                      <p className="text-sm text-emerald-900">Consultation fee: <strong>{m.content.slice(FEE_PREFIX.length)}</strong></p>
+                    </div>
+                  )
+                }
                 return <p key={m.id} className="text-center text-xs text-gray-400 italic">{m.content}</p>
               }
               const isMe = m.sender_id === user.id

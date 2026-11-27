@@ -46,6 +46,9 @@ export default function Register() {
 
   async function handleSubmit(e) {
     e.preventDefault()
+    // Only patients can sign themselves up; doctor / BHW / admin roles are
+    // assigned by an admin (the database ignores a role chosen at sign-up).
+    if (form.role !== 'patient') { setError('Doctor and BHW accounts are created by the administrator.'); return }
     if (form.password !== form.confirm) { setError('Passwords do not match'); return }
     if (form.role === 'patient') {
       const birthYearError = validateBirthYear(form.birthYear)
@@ -118,10 +121,13 @@ export default function Register() {
           ))}
         </div>
 
-        {form.role === 'bhw' && (
-          <div className="bg-bhw-50 border border-bhw-100 rounded-xl px-4 py-3 text-sm text-bhw-700 mb-4 flex items-start gap-2">
+        {form.role !== 'patient' && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800 mb-4 flex items-start gap-2">
             <span className="shrink-0 mt-0.5">ℹ️</span>
-            <span>BHW accounts require admin approval before you can access the portal.</span>
+            <span>
+              {form.role === 'doctor' ? 'Doctor' : 'BHW'} accounts are set up by the HealthConnect administrator.
+              Please contact the admin to get access. Patients can sign up here.
+            </span>
           </div>
         )}
 

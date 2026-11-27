@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import AnnouncementsFeed from '../../components/shared/AnnouncementsFeed'
 
 function QuickAction({ icon: Icon, label, color, bg, border, onClick }) {
   return (
@@ -46,6 +47,7 @@ export default function BHWDashboard() {
 
   return (
     <div className="space-y-6 pb-6">
+      <AnnouncementsFeed tone="bhw"/>
       {/* Hero Banner */}
       <div className="bg-gradient-to-r from-bhw-800 to-bhw-600 rounded-2xl p-6 text-white relative overflow-hidden">
         <div className="absolute right-4 top-4 opacity-20">

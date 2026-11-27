@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import QueueStatusCard from '../../components/patient/QueueStatusCard'
 import { isActive, statusMeta, relativeDay } from '../../lib/queue'
+import AnnouncementsFeed from '../../components/shared/AnnouncementsFeed'
 
 function StatCard({ icon: Icon, value, label, sub, color }) {
   return (
@@ -74,6 +75,7 @@ export default function PatientDashboard() {
 
   return (
     <div className="space-y-6">
+      <AnnouncementsFeed tone="patient"/>
       {/* Hero banner */}
       <div className="bg-gradient-to-r from-patient-700 to-patient-500 rounded-2xl p-6 text-white relative overflow-hidden">
         <div className="absolute right-4 top-4 opacity-10">

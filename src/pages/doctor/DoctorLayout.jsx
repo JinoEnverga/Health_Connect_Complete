@@ -7,6 +7,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext'
 import TelemedicineLogo from '../../components/TelemedicineLogo'
 import IncomingCallBanner from '../../components/shared/IncomingCallBanner'
+import DoorbellBanner from '../../components/doctor/DoorbellBanner'
 
 const nav = [
   { to: '/doctor/dashboard',     icon: LayoutDashboard, label: 'Dashboard' },
@@ -127,6 +128,7 @@ export default function DoctorLayout() {
         <main className="flex-1 overflow-y-auto p-4 sm:p-6">
           <Outlet />
           {user && <IncomingCallBanner role="doctor" userId={user.id}/>}
+          {user && <DoorbellBanner doctorId={user.id}/>}
         </main>
       </div>
     </div>
