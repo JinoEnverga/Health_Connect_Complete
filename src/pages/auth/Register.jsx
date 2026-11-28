@@ -1,19 +1,12 @@
 import React, { useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
+import TelemedicineLogo from '../../components/TelemedicineLogo'
 
-const ROLES = [
-  { value: 'patient', label: '🧑 Patient',  active: 'bg-patient-600 text-white shadow', text: 'text-patient-600' },
-  { value: 'doctor',  label: '👨‍⚕️ Doctor',   active: 'bg-doctor-600 text-white shadow',  text: 'text-doctor-600' },
-  { value: 'bhw',     label: '🛡️ BHW',       active: 'bg-bhw-600 text-white shadow',     text: 'text-bhw-600' },
-]
-
-const ACCENT = {
-  patient: { btn: 'bg-patient-600 hover:bg-patient-700', link: 'text-patient-600', gradient: 'from-patient-50 via-white to-blue-50',    label: 'Patient Portal' },
-  doctor:  { btn: 'bg-doctor-600 hover:bg-doctor-700',   link: 'text-doctor-600',  gradient: 'from-doctor-50 via-white to-emerald-50',  label: 'Doctor Portal' },
-  bhw:     { btn: 'bg-bhw-600 hover:bg-bhw-700',         link: 'text-bhw-600',     gradient: 'from-bhw-50 via-white to-teal-50',        label: 'BHW Portal' },
-}
+// Public sign-up is for patients only. Doctor, BHW and admin accounts are
+// created by the administrator (the database ignores a role chosen at
+// sign-up anyway — see 017_mobile_contract_part_c.sql, handle_new_user).
 
 // Chronologically valid range for a birth year: no earlier than a very
 // generous human lifespan, and never later than the current year.
@@ -29,37 +22,49 @@ function validateBirthYear(value) {
   return ''
 }
 
+const label = 'block text-sm font-medium text-gray-700 mb-1'
+const field = 'input py-2.5'
+
+function PasswordInput({ id, value, onChange, placeholder, autoComplete }) {
+  const [show, setShow] = useState(false)
+  return (
+    <div className="relative">
+      <input id={id} type={show ? 'text' : 'password'} required placeholder={placeholder}
+        autoComplete={autoComplete} value={value} onChange={onChange}
+        className={`${field} pr-10`}/>
+      <button type="button" onClick={() => setShow(s => !s)}
+        aria-label={show ? 'Hide password' : 'Show password'}
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+        {show ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>}
+      </button>
+    </div>
+  )
+}
+
 export default function Register() {
-  const [params] = useSearchParams()
   const { signUp } = useAuth()
   const navigate   = useNavigate()
-  const defaultRole = ROLES.find(r => r.value === params.get('role'))?.value ?? 'patient'
 
   const [form, setForm] = useState({
-    firstName: '', lastName: '', email: '', password: '', confirm: '',
-    birthYear: '', role: defaultRole,
+    firstName: '', lastName: '', email: '', password: '', confirm: '', birthYear: '',
   })
-  const [showPw, setShowPw]   = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
   const [success, setSuccess] = useState(false)
 
+  const set = key => e => setForm(f => ({ ...f, [key]: e.target.value }))
+
   async function handleSubmit(e) {
     e.preventDefault()
-    // Only patients can sign themselves up; doctor / BHW / admin roles are
-    // assigned by an admin (the database ignores a role chosen at sign-up).
-    if (form.role !== 'patient') { setError('Doctor and BHW accounts are created by the administrator.'); return }
     if (form.password !== form.confirm) { setError('Passwords do not match'); return }
-    if (form.role === 'patient') {
-      const birthYearError = validateBirthYear(form.birthYear)
-      if (birthYearError) { setError(birthYearError); return }
-    }
+    const birthYearError = validateBirthYear(form.birthYear)
+    if (birthYearError) { setError(birthYearError); return }
     setLoading(true); setError('')
     try {
-      const data = await signUp(form.email, form.password, form.role, {
+      const data = await signUp(form.email, form.password, 'patient', {
         first_name: form.firstName,
         last_name:  form.lastName,
-        ...(form.role === 'patient' ? { birth_year: parseInt(form.birthYear, 10) } : {}),
+        birth_year: parseInt(form.birthYear, 10),
       })
       // With email confirmation off, Supabase signs the user in right away —
       // go straight to their portal instead of a misleading "check your
@@ -72,8 +77,6 @@ export default function Register() {
       setLoading(false)
     }
   }
-
-  const a = ACCENT[form.role] ?? ACCENT.patient
 
   if (success) return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-white flex items-center justify-center px-4">
@@ -93,115 +96,80 @@ export default function Register() {
   )
 
   return (
-    <div className={`min-h-screen bg-gradient-to-br ${a.gradient} flex flex-col items-center justify-center px-4 py-10`}>
-      <div className="mb-6 text-center">
-        <div className={`w-14 h-14 ${a.btn.split(' ')[0]} rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg`}>
-          <svg viewBox="0 0 24 24" fill="none" className="w-7 h-7 text-white" stroke="currentColor" strokeWidth={2}>
-            <path d="M12 5v14M5 12h14" strokeLinecap="round"/>
-          </svg>
-        </div>
+    <div className="min-h-screen bg-gradient-to-br from-patient-50 via-white to-blue-50 flex flex-col items-center justify-center px-4 py-6">
+      <div className="mb-4 text-center">
+        <TelemedicineLogo className="w-14 h-14 mx-auto mb-2.5 shadow-lg rounded-2xl"/>
         <h1 className="text-2xl font-bold text-gray-900">HealthConnect</h1>
-        <p className="text-gray-500 text-sm">{a.label}</p>
+        <p className="text-gray-500 text-sm">Patient Registration</p>
       </div>
 
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
-        <h2 className="text-xl font-bold text-gray-900 mb-1">Create your account</h2>
-        <p className="text-gray-500 text-sm mb-5">Join HealthConnect today</p>
-
-        {/* Role Toggle */}
-        <div className="flex gap-2 bg-gray-100 rounded-xl p-1 mb-5">
-          {ROLES.map(r => (
-            <button key={r.value} type="button"
-              onClick={() => setForm({...form, role: r.value})}
-              className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${
-                form.role === r.value ? r.active : 'text-gray-500 hover:text-gray-700'
-              }`}>
-              {r.label}
-            </button>
-          ))}
-        </div>
-
-        {form.role !== 'patient' && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800 mb-4 flex items-start gap-2">
-            <span className="shrink-0 mt-0.5">ℹ️</span>
-            <span>
-              {form.role === 'doctor' ? 'Doctor' : 'BHW'} accounts are set up by the HealthConnect administrator.
-              Please contact the admin to get access. Patients can sign up here.
-            </span>
-          </div>
-        )}
+      <div className="w-full max-w-lg bg-white rounded-2xl shadow-xl p-6 sm:p-7 border border-gray-100">
+        <h2 className="text-xl font-bold text-gray-900">Create your account</h2>
+        <p className="text-gray-500 text-sm mb-4">Join HealthConnect as a patient</p>
 
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm mb-4">{error}</div>
+          <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-2.5 text-sm mb-4">{error}</div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+        <form onSubmit={handleSubmit} className="space-y-3.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
-              <input required placeholder="Juan" value={form.firstName}
-                onChange={e => setForm({...form, firstName: e.target.value})}
-                className="input"/>
+              <label htmlFor="reg-first" className={label}>First Name</label>
+              <input id="reg-first" required placeholder="Juan" autoComplete="given-name"
+                value={form.firstName} onChange={set('firstName')} className={field}/>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
-              <input required placeholder="dela Cruz" value={form.lastName}
-                onChange={e => setForm({...form, lastName: e.target.value})}
-                className="input"/>
+              <label htmlFor="reg-last" className={label}>Last Name</label>
+              <input id="reg-last" required placeholder="Dela Cruz" autoComplete="family-name"
+                value={form.lastName} onChange={set('lastName')} className={field}/>
             </div>
           </div>
 
-          {form.role === 'patient' && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Birth Year</label>
-              <input required inputMode="numeric" autoComplete="off" placeholder="e.g., 1998"
+              <label htmlFor="reg-year" className={label}>Birth Year</label>
+              <input id="reg-year" required inputMode="numeric" autoComplete="off" placeholder="e.g., 1998"
                 maxLength={4} value={form.birthYear}
-                onChange={e => setForm({...form, birthYear: e.target.value.replace(/\D/g, '').slice(0, 4)})}
-                className="input"/>
-              <p className="text-xs text-gray-400 mt-1">4 digits, e.g. 1998. Required for your patient profile.</p>
+                onChange={e => setForm(f => ({ ...f, birthYear: e.target.value.replace(/\D/g, '').slice(0, 4) }))}
+                className={field}/>
+              <p className="text-xs text-gray-400 mt-1">4 digits (used to unlock e-prescriptions)</p>
             </div>
-          )}
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
-            <input type="email" required placeholder="you@example.com" value={form.email}
-              onChange={e => setForm({...form, email: e.target.value})}
-              className="input"/>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-            <div className="relative">
-              <input type={showPw ? 'text' : 'password'} required placeholder="At least 8 characters"
-                value={form.password} onChange={e => setForm({...form, password: e.target.value})}
-                className="input pr-10"/>
-              <button type="button" onClick={() => setShowPw(!showPw)}
-                className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600">
-                {showPw ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>}
-              </button>
+            <div>
+              <label htmlFor="reg-email" className={label}>Email Address</label>
+              <input id="reg-email" type="email" required placeholder="you@example.com" autoComplete="email"
+                value={form.email} onChange={set('email')} className={field}/>
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
-            <input type="password" required placeholder="Repeat password"
-              value={form.confirm} onChange={e => setForm({...form, confirm: e.target.value})}
-              className="input"/>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <div>
+              <label htmlFor="reg-pw" className={label}>Password</label>
+              <PasswordInput id="reg-pw" placeholder="At least 8 characters" autoComplete="new-password"
+                value={form.password} onChange={set('password')}/>
+            </div>
+            <div>
+              <label htmlFor="reg-confirm" className={label}>Confirm Password</label>
+              <PasswordInput id="reg-confirm" placeholder="Repeat password" autoComplete="new-password"
+                value={form.confirm} onChange={set('confirm')}/>
+            </div>
           </div>
 
           <button type="submit" disabled={loading}
-            className={`w-full py-3 rounded-xl font-semibold text-white transition-all flex items-center justify-center gap-2 ${a.btn}`}>
+            className="w-full py-3 mt-1 rounded-xl font-semibold text-white transition-all flex items-center justify-center gap-2 bg-patient-600 hover:bg-patient-700 disabled:opacity-70">
             {loading
               ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"/>
               : 'Create Account'}
           </button>
         </form>
 
-        <p className="text-center text-sm text-gray-500 mt-5">
+        <p className="text-center text-sm text-gray-500 mt-4">
           Already have an account?{' '}
-          <Link to="/login" className={`font-semibold hover:underline ${a.link}`}>Sign in</Link>
+          <Link to="/login" className="font-semibold hover:underline text-patient-600">Sign in</Link>
         </p>
       </div>
+      <p className="text-center text-xs text-gray-400 mt-3 max-w-lg">
+        Healthcare provider or BHW? Contact your system administrator for account access.
+      </p>
     </div>
   )
 }

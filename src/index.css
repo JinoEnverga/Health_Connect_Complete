@@ -10,6 +10,17 @@ body { @apply bg-gray-50 text-gray-900; }
 ::-webkit-scrollbar-track { @apply bg-gray-100; }
 ::-webkit-scrollbar-thumb { @apply bg-gray-300 rounded-full; }
 
+/* Browser autofill (Chrome/Edge paint saved emails pale blue): keep the
+   normal white box and dark text. The long transition stops the autofill
+   colour from ever showing; box-shadow is left alone so focus rings still work. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #111827;
+  caret-color: #111827;
+  transition: background-color 600000s 0s, color 600000s 0s;
+}
+
 .sidebar-patient { background: linear-gradient(180deg, #1e40af 0%, #2563eb 100%); }
 .sidebar-doctor  { background: linear-gradient(180deg, #065f46 0%, #059669 100%); }
 .sidebar-bhw     { background: linear-gradient(180deg, #115e59 0%, #0d9488 100%); }
