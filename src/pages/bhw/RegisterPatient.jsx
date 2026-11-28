@@ -1,9 +1,10 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { UserPlus, ChevronLeft, CheckCircle, Copy } from 'lucide-react'
+import { UserPlus, ChevronLeft, CheckCircle, Copy, Check } from 'lucide-react'
 import { createIsolatedClient } from '../../lib/supabase'
 
 const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
+const STEPS = ['Personal Info', 'Address & Barangay', 'Health Details']
 
 // Cryptographically random temporary password (Math.random is guessable).
 function makeTempPassword() {
@@ -21,7 +22,7 @@ function Field({ label, type = 'text', placeholder, required, value, onChange })
         {label}{required && <span className="text-red-500 ml-0.5">*</span>}
       </label>
       <input type={type} value={value} onChange={e => onChange(e.target.value)}
-        placeholder={placeholder} className="input mt-1"/>
+        placeholder={placeholder} className="input-bhw mt-1"/>
     </div>
   )
 }
@@ -138,23 +139,36 @@ export default function RegisterPatient() {
   }
 
   return (
-    <div className="space-y-5 max-w-lg">
+    <div className="space-y-5 max-w-2xl mx-auto">
       <div className="flex items-center gap-3">
         <button onClick={() => navigate(-1)} className="p-2 rounded-xl hover:bg-gray-100 transition-all">
           <ChevronLeft className="w-5 h-5 text-gray-600"/>
         </button>
         <div>
           <h1 className="text-xl font-bold text-gray-900">Register Patient</h1>
-          <p className="text-sm text-gray-500">Step {step} of 3</p>
+          <p className="text-sm text-gray-500">Step {step} of 3 · {STEPS[step - 1]}</p>
         </div>
       </div>
 
-      {/* Step indicator */}
-      <div className="flex gap-2">
-        {[1, 2, 3].map(s => (
-          <div key={s} className={`h-1.5 flex-1 rounded-full transition-all ${s <= step ? 'bg-bhw-600' : 'bg-gray-200'}`}/>
-        ))}
-      </div>
+      {/* Stepper */}
+      <ol className="flex items-center">
+        {STEPS.map((label, i) => {
+          const s = i + 1
+          const done = s < step, active = s === step
+          return (
+            <li key={label} className={`flex items-center ${s < STEPS.length ? 'flex-1' : ''}`}>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-colors ${
+                  done ? 'bg-bhw-600 border-bhw-600 text-white' : active ? 'border-bhw-600 text-bhw-700 bg-white' : 'border-gray-200 text-gray-400 bg-white'}`}>
+                  {done ? <Check className="w-3.5 h-3.5"/> : s}
+                </span>
+                <span className={`text-xs sm:text-sm font-semibold ${active || done ? 'text-bhw-700' : 'text-gray-400'} ${active ? '' : 'hidden sm:inline'}`}>{s}. {label}</span>
+              </div>
+              {s < STEPS.length && <div className={`h-0.5 flex-1 mx-3 rounded-full ${done ? 'bg-bhw-600' : 'bg-gray-200'}`}/>}
+            </li>
+          )
+        })}
+      </ol>
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl">{error}</div>
@@ -175,7 +189,7 @@ export default function RegisterPatient() {
             <Field label="Date of Birth" {...fieldProps('date_of_birth')} type="date"/>
             <div>
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Gender</label>
-              <select value={form.gender} onChange={e => set('gender', e.target.value)} className="input mt-1">
+              <select value={form.gender} onChange={e => set('gender', e.target.value)} className="input-bhw mt-1">
                 <option value="">Select</option>
                 <option value="male">Male</option>
                 <option value="female">Female</option>
@@ -191,8 +205,8 @@ export default function RegisterPatient() {
                   onClick={() => set('blood_type', form.blood_type === bt ? '' : bt)}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
                     form.blood_type === bt
-                      ? 'bg-red-500 text-white border-red-500'
-                      : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'
+                      ? 'bg-bhw-600 text-white border-bhw-600'
+                      : 'bg-white text-gray-700 border-gray-200 hover:border-bhw-500'
                   }`}>
                   {bt}
                 </button>
@@ -204,7 +218,7 @@ export default function RegisterPatient() {
 
       {step === 2 && (
         <div className="card space-y-4">
-          <p className="font-semibold text-gray-800">Address & Emergency Contact</p>
+          <p className="font-semibold text-gray-800">Address &amp; Barangay</p>
           <Field label="Street Address" {...fieldProps('address')} placeholder="123 Rizal St."/>
           <div className="grid grid-cols-2 gap-4">
             <Field label="Barangay / City" {...fieldProps('city')} placeholder="Panicuason"/>
@@ -221,27 +235,27 @@ export default function RegisterPatient() {
 
       {step === 3 && (
         <div className="card space-y-4">
-          <p className="font-semibold text-gray-800">Medical Background</p>
+          <p className="font-semibold text-gray-800">Health Details</p>
           <div>
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Medical History</label>
             <textarea rows={3} value={form.medical_history}
               onChange={e => set('medical_history', e.target.value)}
               placeholder="Known conditions, past surgeries, hospitalizations..."
-              className="input mt-1 resize-none"/>
+              className="input-bhw mt-1 resize-none"/>
           </div>
           <div>
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Allergies</label>
             <textarea rows={2} value={form.allergies}
               onChange={e => set('allergies', e.target.value)}
               placeholder="Drug allergies, food allergies..."
-              className="input mt-1 resize-none"/>
+              className="input-bhw mt-1 resize-none"/>
           </div>
           <div>
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Current Medications</label>
             <textarea rows={2} value={form.current_medications}
               onChange={e => set('current_medications', e.target.value)}
               placeholder="List of current medications..."
-              className="input mt-1 resize-none"/>
+              className="input-bhw mt-1 resize-none"/>
           </div>
         </div>
       )}

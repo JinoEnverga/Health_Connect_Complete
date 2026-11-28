@@ -9,7 +9,7 @@ import TelemedicineLogo from '../../components/TelemedicineLogo'
 
 const nav = [
   { to: '/bhw/dashboard',         icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/bhw/patients',          icon: Users,           label: 'My Patients' },
+  { to: '/bhw/patients',          icon: Users,           label: 'Patients' },
   { to: '/bhw/record-vitals',     icon: Heart,           label: 'Record Vitals' },
   { to: '/bhw/medical-history',   icon: History,         label: 'Medical History' },
   { to: '/bhw/register-patient',  icon: UserPlus,        label: 'Register Patient' },
