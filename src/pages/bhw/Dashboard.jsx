@@ -23,7 +23,6 @@ export default function BHWDashboard() {
   const navigate = useNavigate()
   const [patients, setPatients]   = useState([])
   const [loading, setLoading]     = useState(true)
-  const [barangay, setBarangay]   = useState('')
 
   const hour    = new Date().getHours()
   const greet   = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
@@ -35,11 +34,11 @@ export default function BHWDashboard() {
     setLoading(true)
     const { data } = await supabase
       .from('patient_profiles')
-      .select('*, profiles(first_name, last_name, email, created_at)')
+      .select('*, profiles!inner(first_name, last_name, email, created_at, role)')
+      .eq('profiles.role', 'patient')
       .order('created_at', { ascending: false })
 
     setPatients(data || [])
-    if (data?.[0]?.city) setBarangay(data[0].city)
     setLoading(false)
   }
 
@@ -55,9 +54,7 @@ export default function BHWDashboard() {
         </div>
         <p className="text-teal-200 text-sm font-medium">{greet}</p>
         <h1 className="text-2xl font-bold mt-1">Welcome, {firstName}!</h1>
-        <p className="text-teal-100 text-sm mt-0.5">
-          {barangay ? `Barangay ${barangay}` : 'Barangay Health Worker'}
-        </p>
+        <p className="text-teal-100 text-sm mt-0.5">Barangay Health Worker</p>
         <div className="mt-3">
           <span className="inline-flex items-center gap-1.5 bg-white/20 backdrop-blur text-white text-sm font-semibold px-4 py-1.5 rounded-full">
             <Users className="w-4 h-4"/>
@@ -111,7 +108,7 @@ export default function BHWDashboard() {
       <div>
         <div className="flex items-center justify-between mb-3">
           <h2 className="flex items-center gap-2 text-lg font-bold text-gray-900">
-            <Users className="w-5 h-5 text-bhw-600"/> My Patients
+            <Users className="w-5 h-5 text-bhw-600"/> Patients
           </h2>
           <span className="text-sm text-gray-500">{patients.length} total</span>
         </div>
@@ -127,7 +124,7 @@ export default function BHWDashboard() {
             </div>
             <div>
               <p className="font-semibold text-gray-500">
-                No patients in {barangay ? `Barangay ${barangay}` : 'your barangay'}
+                No patients registered yet
               </p>
               <p className="text-gray-400 text-sm mt-1">Register the first patient to get started</p>
             </div>

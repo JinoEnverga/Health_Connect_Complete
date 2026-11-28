@@ -1,0 +1,103 @@
+REPLY TO THE MOBILE (IS) TEAM
+From the CS web team, 27 Nov 2026
+Re: your "reply_to_cs_2026-11-27.txt"
+
+========================================================================
+1. WHAT WE DID WITH YOUR REPLY
+========================================================================
+
+We read it and agreed the decisions with our team lead.
+
+Nothing was changed in the website code or the database after your reply.
+No migration was written or applied. Every item below is either
+"agreed, no change needed" or "planned for after the defense".
+
+========================================================================
+2. DEFENSE ON MONDAY 1 DECEMBER 2026
+========================================================================
+
+Agreed:
+  - We will NOT reset the old demo bookings again. These turn 'no_show'
+    on their own through the mark-missed job, as you expect:
+      f0dc5f5a  demo@ with demo1    Sat 28 Nov  3:00 PM
+      45f7633a  demo@ with doctor1  Sat 28 Nov  3:00 PM
+      4a3b9db1  demo@ with demo1    Mon 30 Nov  9:00 AM
+      8b818e36  demo@ with vito     Mon 30 Nov  1:00 PM
+  - You create the 1 Dec demo data from the phone (demo1 adds
+    2026-12-01, demo@ books a 1 Dec slot, a fresh prescription is issued
+    close to the defense).
+  - We will NOT create availability_blocks for demo1, doctor1, vito or
+    doctordemo4 before the defense.
+  - Booking is demonstrated on mobile at the defense.
+
+========================================================================
+3. BOOKING MODEL (B3, B4) - DECIDED
+========================================================================
+
+We agree with your option (1): the website switches to your model.
+  - exact dates in doctor_profiles.available_days ('YYYY-MM-DD'),
+    read by the A2 rule (dates win over weekday names)
+  - single 30-minute slots, canonical "9:00 AM"
+  - booked_slots for taken slots, today's past slots greyed out
+  - 23505 from appointments_no_double_booking -> "that slot was just
+    taken", then refresh
+  - booking window: today to the last day of next month
+  - the web availability editor writes exact dates and single slots
+
+When: AFTER the defense. Nothing changes in scheduling before 1 Dec.
+We will tell you when it is live so tests 1, 11, 12 and 13 can run.
+
+========================================================================
+4. YOUR "STILL OPEN" ITEMS
+========================================================================
+
+4.1 bhw_register_patient
+    We will add the RPC, not a wider RLS policy:
+      bhw_register_patient(p_user_id uuid, p_address text,
+                           p_medical_history text)
+      SECURITY DEFINER, refused unless account_role(auth.uid()) = 'bhw'
+      (and the target user must be a patient)
+    The website's BHW "Register Patient" page has the same gap and will
+    use it too.
+    When: after the defense. We will send the final signature and tell
+    you when it is live.
+
+4.2 One-active prescription message on mobile: noted, nothing needed
+    from us. The website already shows "already has an active
+    prescription" for 23505.
+
+4.3 ai-scans: noted. The bucket stays public until you tell us a build
+    reads scan photos with signed URLs.
+
+========================================================================
+5. YOUR ANSWERS TO OUR ASKS
+========================================================================
+
+Received and understood, no further action on our side:
+  - mobile never updates profiles.role directly
+  - every mobile doctor list is behind login
+  - doorbell: public broadcast 'doorbell-<doctor id>', same events and
+    payload as the website
+  - announcements: target_roles as a list of role names
+  - update_last_login(user_uuid) is the call mobile makes
+
+========================================================================
+6. PART D TESTS
+========================================================================
+
+Yes, let us run them together before 1 Dec, with one Android phone on
+build 2009 and one browser.
+  - Run now:   tests 2 to 10, and 14
+  - Skip for now: 1, 11, 12, 13 (they need the slot-booking switch)
+
+Proposed time: [DAY / TIME - to be filled in by the CS team]
+Please confirm.
+
+========================================================================
+SUMMARY OF WHAT WE MADE
+========================================================================
+
+  - This reply file (docs/reply_from_cs_2026-11-27.txt).
+  - No code changes, no database changes.
+  - Planned for after 1 Dec: website slot booking (B3, B4) and
+    bhw_register_patient.

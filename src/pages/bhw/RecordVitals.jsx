@@ -55,7 +55,8 @@ export default function BHWRecordVitals() {
 
   useEffect(() => {
     supabase.from('patient_profiles')
-      .select('user_id, city, profiles(first_name, last_name)')
+      .select('user_id, city, profiles!inner(first_name, last_name, role)')
+      .eq('profiles.role', 'patient')
       .then(({ data }) => setPatients(data || []))
   }, [])
 

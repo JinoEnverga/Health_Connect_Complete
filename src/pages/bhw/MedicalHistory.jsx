@@ -15,7 +15,8 @@ export default function BHWMedicalHistory() {
 
   useEffect(() => {
     supabase.from('patient_profiles')
-      .select('user_id, city, blood_type, medical_history, allergies, current_medications, profiles(first_name, last_name)')
+      .select('user_id, city, blood_type, medical_history, allergies, current_medications, profiles!inner(first_name, last_name, role)')
+      .eq('profiles.role', 'patient')
       .then(({ data }) => setPatients(data || []))
   }, [])
 

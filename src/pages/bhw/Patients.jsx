@@ -26,7 +26,8 @@ export default function BHWPatients() {
     setLoading(true)
     const { data } = await supabase
       .from('patient_profiles')
-      .select('*, profiles(first_name, last_name, email, phone)')
+      .select('*, profiles!inner(first_name, last_name, email, phone, role)')
+      .eq('profiles.role', 'patient')
       .order('created_at', { ascending: false })
     setPatients(data || [])
     setFiltered(data || [])
