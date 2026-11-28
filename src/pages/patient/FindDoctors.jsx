@@ -229,7 +229,9 @@ export default function FindDoctors() {
   const [viewing, setViewing]       = useState(null)
 
   useEffect(() => {
-    supabase.from('doctor_directory').select('*')
+    // Same rule as BookAppointment and the mobile booking screen: doctors who
+    // are not accepting patients are left out entirely.
+    supabase.from('doctor_directory').select('*').eq('is_accepting_patients', true)
       .then(({ data }) => { setDoctors(data || []); setLoading(false) })
   }, [])
 

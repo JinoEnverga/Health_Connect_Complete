@@ -24,10 +24,11 @@ export function formatCallDuration(totalSec) {
   return `${sec} sec`
 }
 
-// '₱500.00' for PHP, otherwise '<CUR> 1,234.50'; null / 0 -> 'No fee'.
+// '₱500.00' for PHP, otherwise '<CUR> 1,234.50'; null / 0 -> 'Free' (same word
+// the mobile app writes for free health-center consultations).
 export function formatFee(amount, currency = 'PHP') {
   const n = Number(amount)
-  if (!amount || !n) return 'No fee'
+  if (!amount || !n) return 'Free'
   const num = n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   return (!currency || currency === 'PHP') ? `₱${num}` : `${currency} ${num}`
 }

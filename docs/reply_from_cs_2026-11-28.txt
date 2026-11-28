@@ -1,0 +1,90 @@
+MESSAGE TO THE MOBILE (IS) TEAM
+From the CS web team, 28 Nov 2026
+Re: your message "doctors hidden for the 1 Dec defense"
+
+========================================================================
+1. WE CHECKED YOUR CHANGES IN THE SHARED DATABASE
+========================================================================
+
+Everything matches your message:
+
+  - Only Jino Encinas (demo1@healthconnect.ph) has
+    is_accepting_patients = true. Vito Corleone, Maria Santos, Carla
+    Paraiso, Demo Demo and Demo Doctor are false.
+  - demo1's consultation_fee is 0.00.
+  - be755ab4 (demo@ with demo1, Tue 1 Dec, 12:30 PM) is 'upcoming'.
+  - 6abe18a5 (the 2:00 PM one) is 'cancelled'.
+
+We will not accept, call or change be755ab4 from the website before
+the defense.
+
+========================================================================
+2. WHAT WE CHANGED ON THE WEBSITE
+========================================================================
+
+Two small changes so the website behaves like the app. No database
+changes.
+
+  a) Find Doctors now hides doctors who are not accepting patients
+     File: src/pages/patient/FindDoctors.jsx
+
+     Before: the patient's Find Doctors page listed all 6 doctors and
+     marked the 5 hidden ones "Offline".
+     Now: it reads doctor_directory with
+     is_accepting_patients = true, the same rule as our Book
+     Appointment page and your new booking screen. Right now it shows
+     only Jino Encinas. A doctor you turn back on appears again on both
+     apps.
+
+  b) A fee of 0 now says "Free" in the chat
+     File: src/lib/chatSystem.js (formatFee)
+
+     When a doctor presses Accept Booking on the website, we post the
+     shared system line:
+
+       Booking accepted · Consultation fee: <amount>
+
+     For a fee of 0 or no fee we used to write "No fee". We now write
+     "Free", the same word as your chat card:
+
+       Booking accepted · Consultation fee: Free
+
+     Fees above 0 are unchanged, e.g. "₱500.00". Our chat shows any
+     fee line, so lines you write display correctly on the website.
+
+========================================================================
+3. DOCTORS FOR THE WEBSITE DEMO
+========================================================================
+
+Our part of the demo uses demo1 (Jino Encinas). If we need another
+doctor turned back on, we will tell you before 1 Dec. We will not
+change the doctor flags ourselves without telling you.
+
+========================================================================
+4. AFTER THE DEFENSE
+========================================================================
+
+  - Your restore script: OK with us. Run
+    supabase/restore_demo_cleanup_2026-11-28.sql after 1 Dec. It is
+    fine that the line for 70d95213 (back to in_progress) is refused by
+    our queue trigger.
+
+  - Cancel policy: agreed, thank you for finding it. After the defense
+    we will add a WITH CHECK to "appointments: patient cancels own":
+
+      WITH CHECK (auth.uid() = patient_id AND status = 'cancelled')
+
+    Then a patient can only cancel their own upcoming booking and
+    cannot change doctor_id, appointment_date, time_slot or
+    chief_complaint through the API. Your "Cancel booking" button keeps
+    working, because it only sets status = 'cancelled'.
+
+  - Server-side booking checks: agreed. Today the doctor's dates, the
+    two-month window and "not accepting patients" are checked only in
+    the apps. After the defense we will propose a database check on
+    booking insert. We will send you the SQL to review before applying
+    it, since your booking screen writes the same table.
+
+Nothing above changes the database before 1 Dec.
+
+-- CS web team
